@@ -1,0 +1,1 @@
+CREATE POLICY "Allow all to update" ON public.evaluations FOR UPDATE TO public USING (true) WITH CHECK (true);

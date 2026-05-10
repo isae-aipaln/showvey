@@ -1,0 +1,1 @@
+ALTER TABLE public.product_information ADD COLUMN sort_order integer DEFAULT 0;
