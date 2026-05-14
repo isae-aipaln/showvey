@@ -180,6 +180,15 @@ const AdminEvaluationPage = () => {
     try {
       toast.loading(`${projectName} 데이터를 불러오는 중...`, { id: "csv-download" });
 
+      // 1-1. 사용자 권한 정보 가져오기
+      const usersRef = collection(db, "users");
+      const userSnapshot = await getDocs(usersRef);
+      const userRoleMap: Record<string, string> = {};
+      userSnapshot.docs.forEach(doc => {
+        userRoleMap[doc.id] = doc.data().role || "";
+      });
+
+      // 1-2. 평가 데이터 가져오기
       const evalsRef = collection(db, "evaluations");
       const q = query(evalsRef, where("Project_name", "==", projectName));
       const snapshot = await getDocs(q);
@@ -192,14 +201,16 @@ const AdminEvaluationPage = () => {
       }
 
       // 2. CSV 데이터 구성 (한글 깨짐 방지 BOM 추가)
-      const headers = ["ID", "평가자 ID", "품번", "구매 의사", "디자인", "가격", "총평", "좋아요 이미지"];
+      const headers = ["ROLE", "ID", "품번", "구매 의사", "희망주문량", "가격", "총평", "좋아요 이미지"];
       const csvRows = [
         headers.join(","),
         ...data.map((row: any) => {
           const likedImages = Array.isArray(row.Liked_images) ? row.Liked_images.join(" ; ") : "";
+          const userRole = userRoleMap[row.Evaluator_ID] || "";
+
           return [
+            `"${userRole}"`,
             row.id,
-            `"${row.Evaluator_ID}"`,
             `"${row.Style_no}"`,
             `"${row.Purchase_intent || ""}"`,
             `"${row.Order_count || ""}"`,
