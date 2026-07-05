@@ -119,6 +119,11 @@ const LoginPage = () => {
           </button>
         </form>
       </div>
+
+      {/* Copyright footer */}
+      <p className="pb-2 text-center text-[11px] text-muted-foreground/60">
+        Copyright © 2026 주식회사 이새에프앤씨 All rights reserved.
+      </p>
     </div>
   );
 };

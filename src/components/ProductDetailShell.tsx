@@ -115,6 +115,9 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
   const [currentCoordImages, setCurrentCoordImages] = useState<string[]>([]);
   const [currentThumbnail, setCurrentThumbnail] = useState<string | null>(null);
 
+  // 이미지가 하나도 없는 스타일 여부 (주의: dbProduct가 로드된 시점에만 true, 로딩중에는 false)
+  const hasNoImages = dbProduct !== null && !currentThumbnail && currentImages.length === 0 && currentCoordImages.length === 0;
+
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [coordImageFiles, setCoordImageFiles] = useState<File[]>([]);
@@ -380,6 +383,92 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
     }
   };
 
+  // 이미지가 없는 스타일일 때 코디페이지 없이 다음 스타일로 바로 이동하는 핸들러
+  const handleNoImageNextStyle = async () => {
+    if (!product) return;
+    const sc = normalizeStyleNo(product.styleCode);
+    const currentProjectName = product.projectId;
+    const evalDocId = `${currentUser}_${sc}`;
+    const evalRef = doc(db, "evaluations", evalDocId);
+
+    if (userRole === "STORE") {
+      const trimmedComment = comment.trim();
+      if (price || design || trimmedComment) {
+        if (!ensureAuthed()) return;
+        try {
+          toast.loading("평가 저장 중...", { id: "eval-save-next" });
+          await setDoc(evalRef, {
+            Style_no: sc,
+            Evaluator_ID: currentUser,
+            Price: price,
+            Order_count: design,
+            Comment: trimmedComment || null,
+            Project_name: currentProjectName,
+          }, { merge: true });
+          updateEvaluation({ Style_no: sc, Evaluator_ID: currentUser, Price: price, Order_count: design, Comment: trimmedComment || null, Project_name: currentProjectName });
+          markProductEvaluated(product.id);
+          toast.dismiss("eval-save-next");
+        } catch {
+          toast.dismiss("eval-save-next");
+          toast.error("평가 저장 중 오류가 발생했습니다.");
+          return;
+        }
+      }
+    } else if (userRole === "STAFF_2") {
+      const trimmedComment = comment.trim();
+      if (price || purchaseIntent || trimmedComment) {
+        if (!ensureAuthed()) return;
+        try {
+          toast.loading("평가 저장 중...", { id: "eval-save-next" });
+          await setDoc(evalRef, {
+            Style_no: sc,
+            Evaluator_ID: currentUser,
+            Price: price,
+            Purchase_intent: purchaseIntent,
+            Comment: trimmedComment || null,
+            Project_name: currentProjectName,
+          }, { merge: true });
+          updateEvaluation({ Style_no: sc, Evaluator_ID: currentUser, Price: price, Purchase_intent: purchaseIntent, Comment: trimmedComment || null, Project_name: currentProjectName });
+          markProductEvaluated(product.id);
+          toast.dismiss("eval-save-next");
+        } catch {
+          toast.dismiss("eval-save-next");
+          toast.error("평가 저장 중 오류가 발생했습니다.");
+          return;
+        }
+      }
+    } else {
+      const trimmedComment = comment.trim();
+      if (trimmedComment) {
+        if (!ensureAuthed()) return;
+        try {
+          toast.loading("평가 저장 중...", { id: "eval-save-next" });
+          await setDoc(evalRef, {
+            Style_no: sc,
+            Evaluator_ID: currentUser,
+            Comment: trimmedComment,
+            Project_name: currentProjectName,
+          }, { merge: true });
+          updateEvaluation({ Style_no: sc, Evaluator_ID: currentUser, Comment: trimmedComment, Project_name: currentProjectName });
+          markProductEvaluated(product.id);
+          toast.dismiss("eval-save-next");
+        } catch {
+          toast.dismiss("eval-save-next");
+          toast.error("평가 저장 중 오류가 발생했습니다.");
+          return;
+        }
+      }
+    }
+
+    const nextIdx = idx + 1;
+    if (nextIdx < products.length) {
+      navigate(`/${routePrefix}/${products[nextIdx].styleCode}`);
+    } else {
+      toast("모든 품평을 마쳓습니다. 감사합니다!");
+      navigate("/gallery");
+    }
+  };
+
   const currentDisplayCode = userRole === "ADMIN" ? editableStyleCode : isNew ? "NEW_STYLE" : urlStyleCode;
 
   return (
@@ -455,30 +544,33 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
           </div>
         </div>
       ) : (
-        <div className="px-4 pt-4 bg-white">
-          <div className="relative w-full aspect-[2/3] shrink-0 overflow-hidden rounded-lg">
-            <div
-              ref={scrollRef}
-              onScroll={() => {
-                if (scrollRef.current)
-                  setActiveImage(Math.round(scrollRef.current.scrollLeft / scrollRef.current.clientWidth));
-              }}
-              className="flex h-full snap-x snap-mandatory overflow-x-auto"
-              style={{ scrollbarWidth: "none" }}
-            >
-              {currentImages.map((src, i) => (
-                <div key={i} className="relative w-full shrink-0 snap-center rounded-lg overflow-hidden bg-white aspect-[2/3]">
-                  <img src={src} className="w-full h-full object-cover" alt={`coord-${i}`} />
-                </div>
-              ))}
-            </div>
-            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5">
-              {currentImages.map((_, i) => (
-                <div key={i} className={`h-1.5 w-1.5 rounded-full ${i === activeImage ? "bg-primary" : "bg-muted"}`} />
-              ))}
+        /* 이미지가 있을 때만 이미지 슬라이더 영역 표시 (없으면 숨김으로 상품정보/코멘트 영역이 위로 올라옴) */
+        !hasNoImages && (
+          <div className="px-4 pt-4 bg-white">
+            <div className="relative w-full aspect-[2/3] shrink-0 overflow-hidden rounded-lg">
+              <div
+                ref={scrollRef}
+                onScroll={() => {
+                  if (scrollRef.current)
+                    setActiveImage(Math.round(scrollRef.current.scrollLeft / scrollRef.current.clientWidth));
+                }}
+                className="flex h-full snap-x snap-mandatory overflow-x-auto"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {currentImages.map((src, i) => (
+                  <div key={i} className="relative w-full shrink-0 snap-center rounded-lg overflow-hidden bg-white aspect-[2/3]">
+                    <img src={src} className="w-full h-full object-cover" alt={`coord-${i}`} />
+                  </div>
+                ))}
+              </div>
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5">
+                {currentImages.map((_, i) => (
+                  <div key={i} className={`h-1.5 w-1.5 rounded-full ${i === activeImage ? "bg-primary" : "bg-muted"}`} />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )
       )}
 
       <div className="bg-background px-4 pt-4 pb-10">
@@ -543,12 +635,22 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
               >
                 &lt; 이전 스타일
               </button>
-              <button
-                onClick={() => saveAndNavigate("coordi")}
-                className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground"
-              >
-                스타일링 선호도
-              </button>
+              {/* 이미지 없을 때: 코디페이지 없이 다음 스타일로 바로 이동 / 이미지 있을 때: 기존 스타일링 선호도 버튼 */}
+              {hasNoImages ? (
+                <button
+                  onClick={handleNoImageNextStyle}
+                  className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground"
+                >
+                  다음 스타일 &gt;
+                </button>
+              ) : (
+                <button
+                  onClick={() => saveAndNavigate("coordi")}
+                  className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground"
+                >
+                  스타일링 선호도
+                </button>
+              )}
             </div>
           </div>
         )}

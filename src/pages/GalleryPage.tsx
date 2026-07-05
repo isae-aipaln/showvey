@@ -32,6 +32,24 @@ const GalleryPage = () => {
 
   const totalPages = Math.ceil(products.length / itemsPerPage);
 
+  const pageRange = useMemo(() => {
+    const maxVisible = 5;
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + maxVisible - 1);
+
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    const pages = [];
+    for (let i = start; i <= end; i++) {
+      if (i >= 1 && i <= totalPages) {
+        pages.push(i);
+      }
+    }
+    return pages;
+  }, [currentPage, totalPages]);
+
   const routePrefix = "/staff-product";
   // ⭐ Fallback 제거: AppContext.userId를 단일 source of truth로 사용 (읽기 전용 — 평가 카운트 표시에만 사용)
   const currentUser = userId ?? "";
@@ -218,15 +236,19 @@ const GalleryPage = () => {
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-white">
-                    <p className="text-[10px] text-muted-foreground">No Image</p>
+                    {/* 이미지가 하나도 없을 때 품번 표시 (상품이미지, 코디이미지도 모두 없을 때) */}
+                    {product.productImages.length === 0 && product.coordiImages.length === 0 ? (
+                      <p className="text-sm font-bold text-foreground break-all px-3 text-center leading-snug">{product.styleCode}</p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">No Image</p>
+                    )}
                   </div>
                 )}
                 <div
-                  className={`absolute left-4 top-4 flex h-8 w-8 items-center justify-center rounded-full border text-sm font-bold ${
-                    isEvaluatedByMe
+                  className={`absolute left-4 top-4 flex h-8 w-8 items-center justify-center rounded-full border text-sm font-bold ${isEvaluatedByMe
                       ? "bg-[hsl(var(--eval-blue))] border-[hsl(var(--eval-blue))] text-white"
                       : "bg-transparent border-foreground text-foreground"
-                  }`}
+                    }`}
                 >
                   {sequenceNumber}
                 </div>
@@ -254,13 +276,13 @@ const GalleryPage = () => {
               &lt;
             </button>
             <div className="flex gap-3">
-              {Array.from({ length: totalPages }).map((_, idx) => (
+              {pageRange.map((page) => (
                 <button
-                  key={idx}
-                  onClick={() => setCurrentPage(idx + 1)}
-                  className={`${currentPage === idx + 1 ? "font-bold text-foreground" : ""}`}
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`${currentPage === page ? "font-bold text-foreground" : ""}`}
                 >
-                  {idx + 1}
+                  {page}
                 </button>
               ))}
             </div>

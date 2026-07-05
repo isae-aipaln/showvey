@@ -13,5 +13,5 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function normalizeStyleNo(input: string | null | undefined): string {
   if (!input) return "";
-  return input.replace(/[a-z]/g, (ch) => ch.toUpperCase());
+  return input.replace(/[a-z]/g, (ch) => ch.toUpperCase()).replace(/\//g, "_");
 }

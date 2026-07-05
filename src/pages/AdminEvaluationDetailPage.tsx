@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { normalizeStyleNo } from "@/lib/utils";
 
 // CSV 헤더 매칭 정보
 const CSV_MAPPING: Record<string, keyof ProductRow> = {
@@ -150,6 +151,7 @@ const AdminEvaluationDetailPage = () => {
   const [isOngoing, setIsOngoing] = useState(false);
   const [isRandomized, setIsRandomized] = useState(false);
   const [rows, setRows] = useState<ProductRow[]>([emptyRow()]);
+  const [initialStyleNos, setInitialStyleNos] = useState<string[]>([]);
 
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -232,6 +234,8 @@ const AdminEvaluationDetailPage = () => {
       const productSnapshot = await getDocs(q);
 
       if (!productSnapshot.empty) {
+        const styleNos = productSnapshot.docs.map(doc => doc.id);
+        setInitialStyleNos(styleNos);
         const formattedRows: ProductRow[] = productSnapshot.docs.map((doc) => {
           const item = doc.data();
           return {
@@ -264,6 +268,7 @@ const AdminEvaluationDetailPage = () => {
         setRows(formattedRows);
       } else {
         setRows([emptyRow()]);
+        setInitialStyleNos([]);
       }
       toast.dismiss(loadingToast);
     } catch (err: any) {
@@ -375,9 +380,10 @@ const AdminEvaluationDetailPage = () => {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         if (!row.styleNo) continue;
-        if (row.thumbnailFile) uploadTasks.push({ rowIndex: i, type: 'thumbnail', file: row.thumbnailFile, styleNo: row.styleNo });
-        if (row.productImageFiles) row.productImageFiles.forEach(f => uploadTasks.push({ rowIndex: i, type: 'product', file: f, styleNo: row.styleNo }));
-        if (row.coordiImageFiles) row.coordiImageFiles.forEach(f => uploadTasks.push({ rowIndex: i, type: 'coordi', file: f, styleNo: row.styleNo }));
+        const normalized = normalizeStyleNo(row.styleNo);
+        if (row.thumbnailFile) uploadTasks.push({ rowIndex: i, type: 'thumbnail', file: row.thumbnailFile, styleNo: normalized });
+        if (row.productImageFiles) row.productImageFiles.forEach(f => uploadTasks.push({ rowIndex: i, type: 'product', file: f, styleNo: normalized }));
+        if (row.coordiImageFiles) row.coordiImageFiles.forEach(f => uploadTasks.push({ rowIndex: i, type: 'coordi', file: f, styleNo: normalized }));
       }
 
       const uploadResults: Map<number, any> = new Map();
@@ -401,12 +407,20 @@ const AdminEvaluationDetailPage = () => {
       }
 
       const batch = writeBatch(db);
+
+      const currentStyleNos = new Set(rows.map(r => normalizeStyleNo(r.styleNo)).filter(Boolean));
+      const deletedStyleNos = initialStyleNos.filter(ns => !currentStyleNos.has(ns));
+      deletedStyleNos.forEach(styleNo => {
+        batch.delete(doc(db, "products", styleNo));
+      });
+
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         if (!row.styleNo) continue;
+        const normalized = normalizeStyleNo(row.styleNo);
         const res = uploadResults.get(i);
         const item = {
-          Style_no: row.styleNo,
+          Style_no: normalized,
           Project_name: evaluationName,
           Thumbnail_url: res.thumbnail || row.thumbnail[0] || "",
           Product_image_urls: [...row.productImages.filter(u => u.startsWith("http")), ...res.products],
@@ -428,7 +442,7 @@ const AdminEvaluationDetailPage = () => {
           MINI_DELI_Stock_preorder: row.miniDeliStock,
           sort_order: i,
         };
-        batch.set(doc(db, "products", row.styleNo), item, { merge: true });
+        batch.set(doc(db, "products", normalized), item, { merge: true });
       }
 
       const formatDate = (d: string) => d.replace(/-/g, ".");
@@ -441,6 +455,7 @@ const AdminEvaluationDetailPage = () => {
       }, { merge: true });
 
       await batch.commit();
+      setInitialStyleNos(Array.from(currentStyleNos));
       toast.dismiss(loadingToast);
       toast.success("저장 완료!");
       await refreshData();
@@ -498,8 +513,13 @@ const AdminEvaluationDetailPage = () => {
             const key = CSV_MAPPING[h];
             if (key) {
               const val = values[i] || "";
-              if (["thumbnail", "productImages", "coordiImages"].includes(key)) (rowData as any)[key] = val ? val.split(/[|,]/).map((v: string) => v.trim()) : [];
-              else (rowData as any)[key] = val;
+              if (["thumbnail", "productImages", "coordiImages"].includes(key)) {
+                (rowData as any)[key] = val ? val.split(/[|,]/).map((v: string) => v.trim()) : [];
+              } else if (key === "styleNo") {
+                rowData.styleNo = normalizeStyleNo(val);
+              } else {
+                (rowData as any)[key] = val;
+              }
             }
           });
           if (rowData.styleNo) {
@@ -546,7 +566,8 @@ const AdminEvaluationDetailPage = () => {
         const fileName = parts[parts.length - 1];
         const category = parts[parts.length - 2].toLowerCase();
         const styleNo = parts[parts.length - 3] || "";
-        const rowIndex = tempRows.findIndex(r => r.styleNo && styleNo && r.styleNo.toUpperCase() === styleNo.toUpperCase());
+        const normalizedZipStyleNo = normalizeStyleNo(styleNo);
+        const rowIndex = tempRows.findIndex(r => r.styleNo && styleNo && normalizeStyleNo(r.styleNo) === normalizedZipStyleNo);
 
         if (rowIndex !== -1) {
           const blob = await img.file.async("blob");
