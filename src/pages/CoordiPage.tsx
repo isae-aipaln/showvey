@@ -114,6 +114,12 @@ const CoordiPage = () => {
     });
   };
 
+  // 이전 단계(상품정보 페이지)로 돌아가기 — 우측 상단 '돌아가기'와 동일하게 직전 화면으로 이동
+  const handlePrevStep = () => {
+    const prefix = userRole === "GUEST" ? "/guest-product" : "/staff-product";
+    navigate(`${prefix}/${styleCode}`);
+  };
+
   const handleNextStep = async () => {
     if (isAdminFlow) {
       toast.success("스타일 등록이 완료되었습니다.");
@@ -179,18 +185,20 @@ const CoordiPage = () => {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <div className="sticky top-0 z-10 flex items-center justify-between bg-background p-4 border-b">
-        <button onClick={() => setViewMode(viewMode === "gallery" ? "single" : "gallery")}>
-          {viewMode === "gallery" ? <Square className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
-        </button>
-        <div className="absolute left-1/2 -translate-x-1/2 font-medium">{styleCode}</div>
-        <button onClick={() => navigate(-1)} className="text-sm font-medium">
-          돌아가기
-        </button>
+      <div className="sticky top-0 z-20 shrink-0 bg-background px-4 py-3 border-b">
+        <div className="relative flex h-6 w-full items-center justify-between">
+          <button onClick={() => setViewMode(viewMode === "gallery" ? "single" : "gallery")} className="flex items-center text-foreground">
+            {viewMode === "gallery" ? <Square className="h-[22px] w-[22px]" /> : <LayoutGrid className="h-[22px] w-[22px]" />}
+          </button>
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center text-base font-medium">{styleCode}</div>
+          <button onClick={() => navigate(-1)} className="text-base font-medium text-muted-foreground">
+            돌아가기
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 pb-40 px-2 pt-2">
-        <div className={viewMode === "gallery" ? "grid grid-cols-2 gap-2" : "space-y-4"}>
+      <div className="flex-1 pb-40 px-2 pt-2 lg:w-full lg:px-4 lg:pt-4">
+        <div className={viewMode === "gallery" ? "grid grid-cols-2 gap-2 lg:grid-cols-6 lg:gap-3" : "space-y-4 lg:max-w-[480px] lg:mx-auto"}>
           {coordImages.map((src, i) => (
             <div key={i} className="relative rounded-lg overflow-hidden bg-white aspect-[2/3]">
               <img src={src} className="w-full h-full object-cover" alt={`coord-${i}`} />
@@ -202,10 +210,25 @@ const CoordiPage = () => {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 w-full bg-background p-4 border-t z-50">
-        <Button onClick={handleNextStep} className="w-full py-4 text-sm font-medium rounded-full">
-          {isAdminFlow ? "스타일 등록 완료" : "다음 스타일 >"}
-        </Button>
+      <div className="fixed bottom-0 left-0 w-full bg-background p-4 border-t z-50 lg:flex lg:justify-center">
+        {isAdminFlow ? (
+          <Button onClick={handleNextStep} className="w-full py-4 text-sm font-medium rounded-full lg:max-w-md">
+            스타일 등록 완료
+          </Button>
+        ) : (
+          <div className="grid w-full grid-cols-2 gap-2 lg:max-w-2xl">
+            {/* 이전 단계(상품정보)로 돌아가기 — 하얀 바탕/검은 글씨 */}
+            <button
+              onClick={handlePrevStep}
+              className="min-w-0 rounded-full border border-foreground bg-background py-4 text-sm font-medium text-foreground"
+            >
+              &lt; 이전 단계
+            </button>
+            <Button onClick={handleNextStep} className="h-auto w-full min-w-0 py-4 text-sm font-medium rounded-full">
+              다음 스타일 &gt;
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

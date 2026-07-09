@@ -118,6 +118,9 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
   // 이미지가 하나도 없는 스타일 여부 (주의: dbProduct가 로드된 시점에만 true, 로딩중에는 false)
   const hasNoImages = dbProduct !== null && !currentThumbnail && currentImages.length === 0 && currentCoordImages.length === 0;
 
+  // 코디 이미지가 없는 스타일 여부 — 코디평가 페이지를 건너뛰고 바로 다음 스타일로 이동
+  const hasNoCoordiImages = dbProduct !== null && currentCoordImages.length === 0;
+
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [coordImageFiles, setCoordImageFiles] = useState<File[]>([]);
@@ -276,110 +279,56 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
 
     if (!product) return;
 
+    // 입력값이 있으면 저장, 없으면 건너뜀. 반환값: true = 계속 진행 가능 / false = 오류로 중단
+    const persisted = await persistEvaluation();
+    if (!persisted.ok) return;
+
     if (direction === "prev") {
       if (idx > 0) navigate(`/${routePrefix}/${products[idx - 1].styleCode}`);
     } else {
-      const sc = normalizeStyleNo(product.styleCode);
-      const currentProjectName = product.projectId;
-      const evalDocId = `${currentUser}_${sc}`;
-      const evalRef = doc(db, "evaluations", evalDocId);
+      // 코디 페이지로 이동 (저장된 경우 evalId 전달)
+      const suffix = persisted.evalDocId ? `?evalId=${persisted.evalDocId}` : "";
+      navigate(`/coordi/${urlStyleCode}${suffix}`);
+    }
+  };
 
-      if (userRole === "STORE") {
-        const trimmedComment = comment.trim();
-        if (!price && !design && !trimmedComment) {
-          navigate(`/coordi/${urlStyleCode}`);
-          return;
-        }
-        if (!ensureAuthed()) return;
-        try {
-          toast.loading("평가 저장 중...", { id: "eval-save" });
-          await setDoc(evalRef, {
-            Style_no: sc,
-            Evaluator_ID: currentUser,
-            Price: price,
-            Order_count: design,
-            Comment: trimmedComment || null,
-            Project_name: currentProjectName,
-          }, { merge: true });
+  // 현재 입력값을 evaluations 문서에 저장 (권한별 필드 상이). 이전/다음 이동 시 공통으로 사용.
+  // 입력값이 하나도 없으면 저장을 건너뛰고 ok:true 반환 (빈 평가 문서 생성 방지, 기존 동작 유지)
+  const persistEvaluation = async (): Promise<{ ok: boolean; evalDocId?: string }> => {
+    if (!product) return { ok: true };
+    const sc = normalizeStyleNo(product.styleCode);
+    const currentProjectName = product.projectId;
+    const evalDocId = `${currentUser}_${sc}`;
+    const evalRef = doc(db, "evaluations", evalDocId);
+    const trimmedComment = comment.trim();
 
-          updateEvaluation({
-            Style_no: sc,
-            Evaluator_ID: currentUser,
-            Price: price,
-            Order_count: design,
-            Comment: trimmedComment || null,
-            Project_name: currentProjectName,
-          });
-          markProductEvaluated(product.id);
-          toast.dismiss("eval-save");
-          navigate(`/coordi/${urlStyleCode}?evalId=${evalDocId}`);
-        } catch (err) {
-          toast.dismiss("eval-save");
-          toast.error("평가 저장 중 오류가 발생했습니다.");
-        }
-      } else if (userRole === "STAFF_2") {
-        const trimmedComment = comment.trim();
-        if (!price && !purchaseIntent && !trimmedComment) {
-          navigate(`/coordi/${urlStyleCode}`);
-          return;
-        }
-        if (!ensureAuthed()) return;
-        try {
-          toast.loading("평가 저장 중...", { id: "eval-save" });
-          await setDoc(evalRef, {
-            Style_no: sc,
-            Evaluator_ID: currentUser,
-            Price: price,
-            Purchase_intent: purchaseIntent,
-            Comment: trimmedComment || null,
-            Project_name: currentProjectName,
-          }, { merge: true });
+    let hasInput: boolean;
+    let payload: Record<string, any>;
+    if (userRole === "STORE") {
+      hasInput = !!(price || design || trimmedComment);
+      payload = { Style_no: sc, Evaluator_ID: currentUser, Price: price, Order_count: design, Comment: trimmedComment || null, Project_name: currentProjectName };
+    } else if (userRole === "STAFF_2") {
+      hasInput = !!(price || purchaseIntent || trimmedComment);
+      payload = { Style_no: sc, Evaluator_ID: currentUser, Price: price, Purchase_intent: purchaseIntent, Comment: trimmedComment || null, Project_name: currentProjectName };
+    } else {
+      hasInput = !!trimmedComment;
+      payload = { Style_no: sc, Evaluator_ID: currentUser, Comment: trimmedComment, Project_name: currentProjectName };
+    }
 
-          updateEvaluation({
-            Style_no: sc,
-            Evaluator_ID: currentUser,
-            Price: price,
-            Purchase_intent: purchaseIntent,
-            Comment: trimmedComment || null,
-            Project_name: currentProjectName,
-          });
-          markProductEvaluated(product.id);
-          toast.dismiss("eval-save");
-          navigate(`/coordi/${urlStyleCode}?evalId=${evalDocId}`);
-        } catch (err) {
-          toast.dismiss("eval-save");
-          toast.error("평가 저장 중 오류가 발생했습니다.");
-        }
-      } else {
-        const trimmedComment = comment.trim();
-        if (!trimmedComment) {
-          navigate(`/coordi/${urlStyleCode}`);
-          return;
-        }
-        if (!ensureAuthed()) return;
-        try {
-          toast.loading("평가 저장 중...", { id: "eval-save" });
-          await setDoc(evalRef, {
-            Style_no: sc,
-            Evaluator_ID: currentUser,
-            Comment: trimmedComment,
-            Project_name: currentProjectName,
-          }, { merge: true });
+    if (!hasInput) return { ok: true };
+    if (!ensureAuthed()) return { ok: false };
 
-          updateEvaluation({
-            Style_no: sc,
-            Evaluator_ID: currentUser,
-            Comment: trimmedComment,
-            Project_name: currentProjectName,
-          });
-          markProductEvaluated(product.id);
-          toast.dismiss("eval-save");
-          navigate(`/coordi/${urlStyleCode}`);
-        } catch (err) {
-          toast.dismiss("eval-save");
-          toast.error("평가 저장 중 오류가 발생했습니다.");
-        }
-      }
+    try {
+      toast.loading("평가 저장 중...", { id: "eval-save" });
+      await setDoc(evalRef, payload, { merge: true });
+      updateEvaluation(payload as any);
+      markProductEvaluated(product.id);
+      toast.dismiss("eval-save");
+      return { ok: true, evalDocId };
+    } catch (err) {
+      toast.dismiss("eval-save");
+      toast.error("평가 저장 중 오류가 발생했습니다.");
+      return { ok: false };
     }
   };
 
@@ -472,27 +421,31 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
   const currentDisplayCode = userRole === "ADMIN" ? editableStyleCode : isNew ? "NEW_STYLE" : urlStyleCode;
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-white">
-      <div className="sticky top-0 z-20 relative flex shrink-0 items-center justify-between bg-background px-4 py-3">
-        <button onClick={() => navigate("/gallery")} className="text-foreground">
-          <LayoutGrid className="h-5 w-5" />
-        </button>
-        <div className="absolute left-1/2 -translate-x-1/2">
-          {userRole === "ADMIN" ? (
-            <input
-              type="text"
-              value={editableStyleCode}
-              onChange={(e) => setEditableStyleCode(normalizeStyleNo(e.target.value))}
-              className="w-32 border border-foreground bg-background px-2 py-0.5 text-center text-sm font-bold uppercase"
-              placeholder="품번 입력"
-            />
-          ) : (
-            <span className="border border-foreground px-2 py-0.5 text-sm font-bold">{currentDisplayCode}</span>
-          )}
+    <div className={`flex min-h-[100dvh] flex-col bg-white${userRole !== "ADMIN" ? " lg:h-[100dvh]" : ""}`}>
+      <div className="sticky top-0 z-20 shrink-0 bg-background px-4 py-3 border-b">
+        <div className="relative flex h-6 w-full items-center justify-between">
+          <button onClick={() => navigate("/gallery")} className="flex items-center text-foreground">
+            <LayoutGrid className="h-[22px] w-[22px]" />
+          </button>
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center">
+            {userRole === "ADMIN" ? (
+              <input
+                type="text"
+                value={editableStyleCode}
+                onChange={(e) => setEditableStyleCode(normalizeStyleNo(e.target.value))}
+                className="w-32 border border-foreground bg-background px-2 py-0.5 text-center text-base font-medium uppercase"
+                placeholder="품번 입력"
+              />
+            ) : (
+              <span className="text-base font-medium">{currentDisplayCode}</span>
+            )}
+          </div>
+          <div className="text-base font-medium text-muted-foreground">{isNew ? "NEW" : `${idx + 1}/${products.length}`}</div>
         </div>
-        <div className="text-sm text-muted-foreground">{isNew ? "NEW" : `${idx + 1}/${products.length}`}</div>
       </div>
 
+      {/* PC(lg)에서 이미지 슬라이더/정보 영역을 좌우 2단으로 배치하는 래퍼 — ADMIN·모바일은 기존 세로 배치 그대로 */}
+      <div className={userRole === "ADMIN" ? "" : "lg:flex lg:flex-1 lg:min-h-0 lg:w-full lg:items-stretch lg:gap-6 lg:px-4 lg:py-4"}>
       {userRole === "ADMIN" ? (
         <div className="pt-6 space-y-10 pb-10">
           <input
@@ -546,8 +499,8 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
       ) : (
         /* 이미지가 있을 때만 이미지 슬라이더 영역 표시 (없으면 숨김으로 상품정보/코멘트 영역이 위로 올라옴) */
         !hasNoImages && (
-          <div className="px-4 pt-4 bg-white">
-            <div className="relative w-full aspect-[2/3] shrink-0 overflow-hidden rounded-lg">
+          <div className="px-4 pt-4 bg-white lg:shrink-0 lg:h-full lg:px-0 lg:pt-0">
+            <div className="relative w-full aspect-[2/3] shrink-0 overflow-hidden rounded-lg lg:h-full lg:w-auto">
               <div
                 ref={scrollRef}
                 onScroll={() => {
@@ -573,14 +526,25 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
         )
       )}
 
-      <div className="bg-background px-4 pt-4 pb-10">
-        {typeof summaryTable === "function" ? summaryTable(true, dbProduct) : summaryTable}
-
-        {userRole !== "ADMIN" && (
-          <div className="mt-4 space-y-4">
-            {detailTable}
-            {userRole === "STAFF_2" && (
-              <div className="rounded-md border border-foreground p-3">
+      <div
+        className={`bg-background px-4 pt-4 pb-10${
+          userRole !== "ADMIN"
+            ? " lg:flex-1 lg:min-w-0 lg:px-0 lg:pt-0 lg:pb-0 lg:flex lg:flex-col lg:min-h-0"
+            : ""
+        }`}
+      >
+        {userRole !== "ADMIN" ? (
+          <>
+            {/* PC(lg): 세로 가운데 정렬 영역 (콘텐츠가 화면보다 길면 내부 스크롤) */}
+            <div className="lg:flex lg:flex-col lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
+              <div className="lg:w-full lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+                <div className={`lg:grid lg:grid-cols-2 lg:gap-4${userRole === "STAFF_1" ? " lg:flex-1 lg:min-h-0" : ""}`}>
+                  <div className="lg:min-w-0 lg:flex lg:flex-col">
+                    {typeof summaryTable === "function" ? summaryTable(true, dbProduct) : summaryTable}
+                    {detailTable}
+                  </div>
+                  {userRole === "STAFF_2" && (
+                    <div className="rounded-md border border-foreground p-3 mt-4 lg:mt-0 lg:flex-1 lg:min-w-0">
                 <h3 className="mb-3 text-sm font-bold">의견을 남겨주세요.</h3>
                 <div className="space-y-3">
                   <EvalRow
@@ -601,7 +565,7 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
               </div>
             )}
             {userRole === "STORE" && (
-              <div className="rounded-md border border-foreground p-3">
+              <div className="rounded-md border border-foreground p-3 mt-4 lg:mt-0 lg:flex-1 lg:min-w-0">
                 <h3 className="mb-3 text-sm font-bold">의견을 남겨주세요.</h3>
                 <div className="space-y-3">
                   <EvalRow
@@ -621,13 +585,29 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
                 </div>
               </div>
             )}
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="총평을 남겨주세요 (선택 사항)"
-              className="w-full h-20 border rounded-lg p-3 text-sm resize-none"
-            />
-            <div className="flex gap-2 pt-2">
+                  {/* 총평(임직원1): 한 열을 통째로 차지하고 좌측 기본+상세 스택과 세로 길이를 맞춤 */}
+                  {userRole === "STAFF_1" && (
+                    <textarea
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="총평을 남겨주세요 (선택 사항)"
+                      className="w-full h-20 border rounded-lg p-3 text-sm resize-none mt-4 lg:mt-0 lg:flex-1 lg:min-w-0 lg:h-auto lg:min-h-[10rem]"
+                    />
+                  )}
+                </div>
+                {/* 총평(임직원2/매장): [기본정보|평가] 행 아래에 두 영역을 합친 너비로 배치 */}
+                {userRole !== "STAFF_1" && (
+                  <textarea
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="총평을 남겨주세요 (선택 사항)"
+                    className="w-full h-20 border rounded-lg p-3 text-sm resize-none mt-4 lg:h-auto lg:flex-1 lg:min-h-[10rem]"
+                  />
+                )}
+              </div>
+            </div>
+            {/* 하단 버튼: PC에서는 이미지 하단 라인에 맞춤 */}
+            <div className="flex gap-2 pt-2 mt-4">
               <button
                 onClick={() => saveAndNavigate("prev")}
                 disabled={idx <= 0}
@@ -635,8 +615,8 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
               >
                 &lt; 이전 스타일
               </button>
-              {/* 이미지 없을 때: 코디페이지 없이 다음 스타일로 바로 이동 / 이미지 있을 때: 기존 스타일링 선호도 버튼 */}
-              {hasNoImages ? (
+              {/* 코디 이미지 없을 때: 코디페이지 없이 다음 스타일로 바로 이동 / 코디 이미지 있을 때: 기존 스타일링 선호도 버튼 */}
+              {hasNoImages || hasNoCoordiImages ? (
                 <button
                   onClick={handleNoImageNextStyle}
                   className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground"
@@ -652,19 +632,21 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
                 </button>
               )}
             </div>
-          </div>
+          </>
+        ) : (
+          <>
+            {typeof summaryTable === "function" ? summaryTable(true, dbProduct) : summaryTable}
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => saveAndNavigate("coordi")}
+                className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground"
+              >
+                스타일 등록
+              </button>
+            </div>
+          </>
         )}
-
-        {userRole === "ADMIN" && (
-          <div className="mt-4 flex gap-2">
-            <button
-              onClick={() => saveAndNavigate("coordi")}
-              className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground"
-            >
-              스타일 등록
-            </button>
-          </div>
-        )}
+      </div>
       </div>
     </div>
   );

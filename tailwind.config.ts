@@ -1,10 +1,18 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 export default {
   darkMode: ["class"],
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   prefix: "",
   theme: {
+    // lg(1024px)는 아래 plugins의 커스텀 variant로 정의 — html.force-mobile 클래스로 PC↔모바일 화면 전환을 지원하기 위함
+    screens: {
+      sm: "640px",
+      md: "768px",
+      xl: "1280px",
+      "2xl": "1536px",
+    },
     container: {
       center: true,
       padding: "2rem",
@@ -90,5 +98,12 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    // PC↔모바일 화면 전환 기능: html에 force-mobile 클래스가 있으면 모든 lg: 스타일을 비활성화하여
+    // 넓은 화면에서도 모바일 레이아웃으로 표시한다 (기본 동작은 기존과 동일: 1024px 이상 = PC 레이아웃)
+    plugin(({ addVariant }) => {
+      addVariant("lg", "@media (min-width: 1024px) { html:not(.force-mobile) & }");
+    }),
+  ],
 } satisfies Config;

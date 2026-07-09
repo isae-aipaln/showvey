@@ -114,4 +114,22 @@
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--muted-foreground) / 0.5) hsl(var(--muted));
   }
+
+  /* ⭐ PC에서 '모바일 화면 보기' 전환 시(html.force-mobile): 앱을 스마트폰 폭으로 중앙 표시 */
+  html.force-mobile body {
+    background-color: #f4f4f5;
+  }
+  html.force-mobile #root {
+    max-width: 430px;
+    margin-left: auto;
+    margin-right: auto;
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.08);
+    background-color: hsl(var(--background));
+  }
+  /* 코디평가 페이지의 화면 하단 고정 바도 모바일 폭에 맞춰 중앙 정렬 */
+  html.force-mobile .fixed.bottom-0.left-0.w-full {
+    max-width: 430px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }

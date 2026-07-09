@@ -2,24 +2,38 @@ import { useNavigate } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Plus, Trash2, Download, Share2 } from "lucide-react";
+import { Plus, Trash2, Download, Share2, Monitor, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { db, storage } from "@/firebase";
 import { collection, query, where, getDocs, deleteDoc, updateDoc, doc } from "firebase/firestore";
 import { ref, listAll, deleteObject } from "firebase/storage";
 import { normalizeStyleNo } from "@/lib/utils";
 import { exportCommentsToExcel, shareCommentsExcel } from "@/lib/exportComments";
+import { useIsDesktop, useIsDesktopViewport, getForceMobile, setForceMobile } from "@/hooks/use-desktop";
 
 const GalleryPage = () => {
   const { userRole, logout, products, evaluations, refreshData, isRandomized, userId } = useAppContext();
   const navigate = useNavigate();
   const [exitOpen, setExitOpen] = useState(false);
+  // 나가기 팝업 2단계: 종료 확인(confirm) → 감사 인사(thanks)
+  const [exitStep, setExitStep] = useState<"confirm" | "thanks">("confirm");
 
   const [currentPage, setCurrentPage] = useState(() => {
     const saved = sessionStorage.getItem("galleryPage");
     return saved ? Number(saved) : 1;
   });
-  const itemsPerPage = 6;
+  // PC(1024px 이상)에서는 8열×2행=16개, 모바일(또는 모바일 화면 보기)은 2열×3행=6개
+  const isDesktop = useIsDesktop();
+  const itemsPerPage = isDesktop ? 16 : 6;
+
+  // PC↔모바일 화면 전환 버튼: 실제 화면 폭이 PC일 때만 노출 (전환 상태와 무관하게 항상 보여야 되돌릴 수 있음)
+  const isDesktopViewport = useIsDesktopViewport();
+  const [forceMobile, setForceMobileState] = useState(getForceMobile);
+  const handleToggleView = () => {
+    const next = !forceMobile;
+    setForceMobile(next);
+    setForceMobileState(next);
+  };
 
   useEffect(() => {
     sessionStorage.setItem("galleryPage", String(currentPage));
@@ -28,9 +42,16 @@ const GalleryPage = () => {
   const paginatedProducts = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     return products.slice(startIndex, startIndex + itemsPerPage);
-  }, [products, currentPage]);
+  }, [products, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(products.length / itemsPerPage);
+
+  // 모바일→PC 전환 등으로 총 페이지 수가 줄었을 때 현재 페이지가 범위를 벗어나면 보정
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
 
   const pageRange = useMemo(() => {
     const maxVisible = 5;
@@ -151,65 +172,101 @@ const GalleryPage = () => {
     }
   };
 
+  // PC↔모바일 화면 전환 버튼 (모든 권한 공통, 실제 화면 폭이 PC일 때만 표시)
+  const viewToggleButton = isDesktopViewport ? (
+    <button
+      onClick={handleToggleView}
+      aria-label={forceMobile ? "PC 화면으로 전환" : "모바일 화면으로 전환"}
+      title={forceMobile ? "PC 화면으로 전환" : "모바일 화면으로 전환"}
+      className="flex h-[30px] w-[30px] items-center justify-center border border-foreground hover:bg-foreground hover:text-background"
+    >
+      {forceMobile ? <Monitor className="h-[18px] w-[18px]" /> : <Smartphone className="h-[18px] w-[18px]" />}
+    </button>
+  ) : null;
+
   return (
     <div className="h-[100dvh] flex flex-col overflow-hidden bg-background">
-      <div className="shrink-0 flex items-center justify-between bg-background p-4 border-b border-muted">
+      <div className="shrink-0 bg-background p-4 border-b border-muted">
+        <div className="flex w-full items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="border border-foreground px-3 py-1 text-sm font-medium">Total {products.length}</div>
         </div>
         {userRole === "ADMIN" ? (
-          <button
-            onClick={handleAdminComplete}
-            className="border border-foreground px-3 py-1 text-sm font-bold text-center hover:bg-foreground hover:text-background"
-          >
-            수정 완료
-          </button>
+          <div className="flex items-center gap-2">
+            {viewToggleButton}
+            <button
+              onClick={handleAdminComplete}
+              className="border border-foreground px-3 py-1 text-sm font-bold text-center hover:bg-foreground hover:text-background"
+            >
+              수정 완료
+            </button>
+          </div>
         ) : (
           <div className="flex items-center gap-2">
+            {viewToggleButton}
             {userRole !== "STORE" && (
               <>
                 <button
                   onClick={handleShareComments}
                   aria-label="메모 엑셀 공유"
-                  className="flex h-7 w-7 items-center justify-center border border-foreground hover:bg-foreground hover:text-background"
+                  className="flex h-[30px] w-[30px] items-center justify-center border border-foreground hover:bg-foreground hover:text-background"
                 >
-                  <Share2 className="h-4 w-4" />
+                  <Share2 className="h-[18px] w-[18px]" />
                 </button>
                 <button
                   onClick={handleDownloadComments}
                   aria-label="메모 엑셀 다운로드"
-                  className="flex h-7 w-7 items-center justify-center border border-foreground hover:bg-foreground hover:text-background"
+                  className="flex h-[30px] w-[30px] items-center justify-center border border-foreground hover:bg-foreground hover:text-background"
                 >
-                  <Download className="h-4 w-4" />
+                  <Download className="h-[18px] w-[18px]" />
                 </button>
               </>
             )}
-            <Dialog open={exitOpen} onOpenChange={setExitOpen}>
+            <Dialog open={exitOpen} onOpenChange={(open) => { setExitOpen(open); if (!open) setExitStep("confirm"); }}>
               <DialogTrigger asChild>
                 <div className="cursor-pointer border border-foreground px-3 py-1 text-sm font-medium">
-                  품평 완료 <span className="text-[hsl(var(--eval-blue))]">{evaluatedCount}</span>
+                  완료 <span className="text-[hsl(var(--eval-blue))]">{evaluatedCount}</span>
                 </div>
               </DialogTrigger>
               <DialogContent className="flex max-w-xs flex-col items-center gap-6 rounded-2xl p-8">
-                <p className="text-center text-sm font-medium">
-                  품평이 완료되었습니다.
-                  <br />
-                  참여해주셔서 감사합니다.
-                </p>
-                <button
-                  onClick={handleExit}
-                  className="w-full rounded-full bg-primary py-3 text-sm text-primary-foreground"
-                >
-                  나가기
-                </button>
+                {exitStep === "confirm" ? (
+                  <>
+                    <p className="text-center text-sm font-medium">앱을 종료하시겠습니까?</p>
+                    <div className="flex w-full gap-2">
+                      <button
+                        onClick={() => setExitStep("thanks")}
+                        className="flex-1 rounded-full border border-foreground bg-background py-3 text-sm font-medium text-foreground"
+                      >
+                        확인
+                      </button>
+                      <button
+                        onClick={() => setExitOpen(false)}
+                        className="flex-1 rounded-full bg-primary py-3 text-sm font-medium text-primary-foreground"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-center text-sm font-medium">감사합니다.</p>
+                    <button
+                      onClick={handleExit}
+                      className="w-full rounded-full bg-primary py-3 text-sm font-medium text-primary-foreground"
+                    >
+                      확인
+                    </button>
+                  </>
+                )}
               </DialogContent>
             </Dialog>
           </div>
         )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
-        <div className="grid grid-cols-2 gap-x-2 gap-y-3 content-start">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-3 content-start lg:grid-cols-8 lg:gap-x-3 lg:gap-y-4 lg:min-h-full lg:content-center">
           {userRole === "ADMIN" && currentPage === 1 && (
             <div
               onClick={() => navigate("/staff-product/new")}
@@ -228,12 +285,18 @@ const GalleryPage = () => {
                 className="relative w-full aspect-[2/3] cursor-pointer overflow-hidden rounded-md bg-white"
               >
                 {product.thumbnailImage ? (
-                  <img
-                    src={product.thumbnailImage}
-                    alt={product.styleCode}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
+                  <>
+                    <img
+                      src={product.thumbnailImage}
+                      alt={product.styleCode}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                    {/* 썸네일이 있을 때는 품번을 좌측 상단 순번 뱃지 아래에 표시 (모델 가림 방지, 썸네일 배경이 대부분 밝아 배경 투명 처리) */}
+                    <p className="absolute left-4 top-[3.25rem] z-10 max-w-[70%] truncate text-[10px] font-bold text-foreground">
+                      {product.styleCode}
+                    </p>
+                  </>
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-white">
                     {/* 이미지가 하나도 없을 때 품번 표시 (상품이미지, 코디이미지도 모두 없을 때) */}
@@ -265,7 +328,7 @@ const GalleryPage = () => {
           })}
         </div>
       </div>
-      <div className="shrink-0 w-full bg-background px-4 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] border-t border-muted flex flex-col gap-3">
+      <div className="shrink-0 w-full bg-background px-4 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] border-t border-muted flex flex-col gap-3 lg:items-center">
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
             <button
@@ -297,9 +360,9 @@ const GalleryPage = () => {
         )}
         <button
           onClick={() => products.length > 0 && navigate(`${routePrefix}/${products[0].styleCode}`)}
-          className="w-full rounded-full bg-primary h-12 text-sm font-bold text-primary-foreground shadow-lg active:scale-[0.98]"
+          className="w-full rounded-full bg-primary h-12 text-sm font-bold text-primary-foreground shadow-lg active:scale-[0.98] lg:max-w-md"
         >
-          품평 시작하기
+          시작하기
         </button>
       </div>
     </div>

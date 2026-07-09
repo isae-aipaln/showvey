@@ -18,14 +18,28 @@ const getCategory = (styleNo?: string) => {
 };
 
 const StaffInfoSection = ({ drawerOpen, dbProduct }: { drawerOpen: boolean; dbProduct: DbProduct | null }) => {
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const { userRole } = useAppContext();
+  // 임직원1(STAFF_1)은 페이지 진입 시 상세정보가 자동으로 펼쳐진 상태로 시작 (접기 토글은 그대로 사용 가능)
+  const [isDetailOpen, setIsDetailOpen] = useState(userRole === "STAFF_1");
   const p = dbProduct;
 
   return (
-    <div className="w-full mb-4">
-      {/* 기본정보 테이블 */}
-      <table className="w-full border-collapse border border-muted-foreground/40 text-xs text-left mb-0">
+    /* 기본정보와 상세정보는 전 기기에서 세로로 쌓임. 임직원1 PC에서는 열 전체 높이를 채우도록 상세정보 박스가 늘어남 */
+    <div className={`w-full mb-4${userRole !== "ADMIN" ? " lg:mb-0 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col lg:justify-between" : ""}`}>
+      {/* 기본정보 테이블 — 임직원2/매장 PC에서는 옆의 평가박스 높이에 맞춰 행이 늘어남 */}
+      <div className={userRole === "STAFF_2" || userRole === "STORE" ? "lg:flex-1 lg:min-h-0" : undefined}>
+      <table className={`w-full border-collapse border border-muted-foreground/40 text-xs text-left mb-0${
+        /* PC: 라운드 모서리 적용 (border-collapse에선 radius가 안 먹어 separate로 전환하고 셀 테두리를 구분선 방식으로 변경) */
+        userRole !== "ADMIN"
+          ? " lg:border-separate lg:border-spacing-0 lg:rounded-lg lg:overflow-hidden lg:[&_td]:border-0 lg:[&_td]:border-b lg:[&_td]:border-muted-foreground/40 lg:[&_tr:last-child>td]:border-b-0 lg:[&_td:first-child]:border-r"
+          : ""
+      }${
+        userRole === "STAFF_1"
+          ? " lg:[&_td]:py-3" /* 임직원1 PC: 기본정보 행 높이를 살짝만 키움 */
+          : userRole === "STAFF_2" || userRole === "STORE"
+            ? " lg:h-full"
+            : ""
+      }`}>
         <tbody>
           <tr>
             <td className="border border-muted-foreground/40 px-3 py-2 text-muted-foreground font-medium w-1/4 bg-muted/30">
@@ -47,13 +61,15 @@ const StaffInfoSection = ({ drawerOpen, dbProduct }: { drawerOpen: boolean; dbPr
           </tr>
         </tbody>
       </table>
+      </div>
 
       {/* 상세정보 (ADMIN/STAFF_1 전용) */}
+      {/* 임직원1 PC: 상세정보는 콘텐츠 높이만큼만 차지하고 열 하단(총평 하단 라인)에 붙음 — 남는 여백은 기본정보와의 사이에 배치 */}
       {drawerOpen && (userRole === "ADMIN" || userRole === "STAFF_1") && (
-        <>
+        <div>
           <button
             onClick={() => setIsDetailOpen(!isDetailOpen)}
-            className="flex justify-between items-center w-full px-3 py-2.5 border-l border-r border-b border-muted-foreground/40 bg-background text-xs font-bold text-foreground transition-colors hover:bg-muted/30"
+            className={`flex justify-between items-center w-full px-3 py-2.5 border-l border-r border-b border-muted-foreground/40 bg-background text-xs font-bold text-foreground transition-colors hover:bg-muted/30${userRole === "STAFF_1" ? ` lg:border-t lg:rounded-t-lg${!isDetailOpen ? " lg:rounded-b-lg" : ""}` : ""}`}
           >
             <span>상세정보</span>
             {isDetailOpen ? (
@@ -64,7 +80,7 @@ const StaffInfoSection = ({ drawerOpen, dbProduct }: { drawerOpen: boolean; dbPr
           </button>
 
           {isDetailOpen && (
-            <div className="w-full border-l border-r border-b border-muted-foreground/40 text-xs text-left flex flex-col bg-background">
+            <div className={`w-full border-l border-r border-b border-muted-foreground/40 text-xs text-left flex flex-col bg-background${userRole === "STAFF_1" ? " lg:[&>div]:py-4 lg:rounded-b-lg lg:overflow-hidden" : ""}`}>
               <div className="flex items-start border-b border-muted-foreground/20 px-3 py-2">
                 <span className="shrink-0 text-muted-foreground mr-2 w-24">· 원단명</span>
                 <span className="text-foreground font-medium break-all flex-1 text-center">{p?.Fabric_name ?? "-"}</span>
@@ -143,7 +159,7 @@ const StaffInfoSection = ({ drawerOpen, dbProduct }: { drawerOpen: boolean; dbPr
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
