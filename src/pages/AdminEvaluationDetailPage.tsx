@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import imageCompression from "browser-image-compression";
 import JSZip from "jszip";
+import ExcelJS from "exceljs";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import { db, storage } from "@/firebase";
@@ -350,20 +351,30 @@ const AdminEvaluationDetailPage = () => {
     }
   };
 
-  const handleTemplateDownload = () => {
+  const handleTemplateDownload = async () => {
+    // \uC0C1\uD488\uC815\uBCF4 \uC5C5\uB85C\uB4DC \uC591\uC2DD(xlsx) \u2014 \uCEEC\uB7FC \uC21C\uC11C/\uBA85\uCE6D\uC740 \uC0C1\uD488\uC815\uBCF4_\uC5C5\uB85C\uB4DC_\uC591\uC2DD.xlsx \uAE30\uC900
     const headers = [
-      "Style_no", "Project_name", "Thumbnail_url", "Product_image_urls",
-      "Sale_price", "Fabric_name", "Composition", "MINI_DELI_Stock_preorder"
+      "sort_order", "Style_no", "Thumbnail_url", "Product_image_urls", "Sale_price",
+      "Fabric_name", "Composition", "Fabric_width", "Unit_cost", "Markup", "Consumption",
+      "Raw_material_cost", "Sub_material_cost", "Special_trim_cost", "Labor_cost", "Mfg_cost",
+      "Add_labor_info", "Etc_rawmat_info", "MINI_DELI_Stock_preorder", "Coord_image_urls",
     ];
-    const csvContent = "\uFEFF" + headers.join(",");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Sheet1");
+    sheet.columns = headers.map((h) => ({ header: h, key: h, width: Math.max(14, h.length + 2) }));
+    sheet.getRow(1).font = { bold: true };
+    const buf = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buf], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", "품평_업로드_양식.csv");
+    link.setAttribute("download", "상품정보_업로드_양식.xlsx");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleSave = async () => {
