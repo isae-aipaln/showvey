@@ -497,22 +497,53 @@ const AdminEvaluationDetailPage = () => {
     return result;
   };
 
+  // xlsx 셀 값을 문자열로 변환 (하이퍼링크/수식/리치텍스트/날짜 셀 대응)
+  const cellToString = (v: any): string => {
+    if (v === null || v === undefined) return "";
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    if (typeof v === "object") {
+      if ((v as any).richText) return (v as any).richText.map((t: any) => t.text).join("").trim();
+      if ((v as any).text !== undefined) return String((v as any).text).trim();
+      if ((v as any).result !== undefined) return cellToString((v as any).result);
+      return String(v).trim();
+    }
+    return String(v).trim();
+  };
+
   const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const isXlsx = file.name.toLowerCase().endsWith(".xlsx");
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const buffer = event.target?.result as ArrayBuffer;
-        let text = "";
-        try {
-          const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
-          text = utf8Decoder.decode(buffer);
-        } catch {
-          const eucKrDecoder = new TextDecoder("euc-kr");
-          text = eucKrDecoder.decode(buffer);
+        let allData: string[][];
+        if (isXlsx) {
+          // 엑셀 양식(.xlsx) 파싱 — 첫 번째 시트 사용, 이후 처리(CSV_MAPPING)는 CSV와 공통
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(buffer);
+          const ws = workbook.worksheets[0];
+          if (!ws) return toast.error("엑셀 시트를 찾을 수 없습니다.");
+          const parsed: string[][] = [];
+          ws.eachRow({ includeEmpty: false }, (row) => {
+            const vals: string[] = [];
+            for (let c = 1; c <= ws.columnCount; c++) vals.push(cellToString(row.getCell(c).value));
+            parsed.push(vals);
+          });
+          // 서식만 있고 값이 없는 유령 행 제거 (헤더 행은 유지)
+          allData = parsed.filter((r, i) => i === 0 || r.some((v) => v !== ""));
+        } else {
+          let text = "";
+          try {
+            const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
+            text = utf8Decoder.decode(buffer);
+          } catch {
+            const eucKrDecoder = new TextDecoder("euc-kr");
+            text = eucKrDecoder.decode(buffer);
+          }
+          allData = parseCSV(text);
         }
-        const allData = parseCSV(text);
         if (allData.length < 2) return toast.error("데이터가 없습니다.");
         const headers = allData[0];
         const existingMap = new Map<string, any>();
@@ -549,7 +580,7 @@ const AdminEvaluationDetailPage = () => {
         setRows(newRows);
         toast.success("상품 정보 로드 완료");
       } catch (err) {
-        toast.error("CSV 읽기 실패");
+        toast.error("파일 읽기 실패 — CSV 또는 XLSX 형식을 확인해주세요.");
       }
     };
     reader.readAsArrayBuffer(file);
@@ -690,7 +721,7 @@ const AdminEvaluationDetailPage = () => {
           setActiveUpload(null);
         }}
       />
-      <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleCsvUpload} />
+      <input ref={csvInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleCsvUpload} />
       <input ref={zipInputRef} type="file" accept=".zip" className="hidden" onChange={handleZipImageUpload} />
 
       <aside className={`flex flex-col justify-between bg-slate-900 text-white transition-all duration-300 ${isSidebarOpen ? "w-56" : "w-16"}`}>

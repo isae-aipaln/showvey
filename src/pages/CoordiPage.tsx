@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { db } from "@/firebase";
 import { collection, query, where, getDocs, doc, setDoc, getDoc, limit, orderBy } from "firebase/firestore";
 import { normalizeStyleNo } from "@/lib/utils";
+import ImageLightbox from "@/components/ImageLightbox";
 
 const CoordiPage = () => {
   // ⭐ [수정] index 대신 styleCode 파라미터를 사용합니다.
@@ -26,6 +27,8 @@ const CoordiPage = () => {
   const isAdminFlow = userRole === "ADMIN" && !evalId;
 
   const [viewMode, setViewMode] = useState<"gallery" | "single">("gallery");
+  // 이미지 클릭 시 확대 팝업으로 표시할 이미지 URL (null이면 팝업 닫힘)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [likedIndices, setLikedIndices] = useState<Set<number>>(new Set());
   const [coordImages, setCoordImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -201,7 +204,7 @@ const CoordiPage = () => {
         <div className={viewMode === "gallery" ? "grid grid-cols-2 gap-2 lg:grid-cols-6 lg:gap-3" : "space-y-4 lg:max-w-[480px] lg:mx-auto"}>
           {coordImages.map((src, i) => (
             <div key={i} className="relative rounded-lg overflow-hidden bg-white aspect-[2/3]">
-              <img src={src} className="w-full h-full object-cover" alt={`coord-${i}`} />
+              <img src={src} className="w-full h-full object-contain cursor-zoom-in" alt={`coord-${i}`} onClick={() => setLightboxSrc(src)} />
               <button onClick={() => toggleLike(i)} className="absolute bottom-3 right-3">
                 <Heart className={`h-8 w-8 ${likedIndices.has(i) ? "fill-black" : "text-black"}`} />
               </button>
@@ -230,6 +233,9 @@ const CoordiPage = () => {
           </div>
         )}
       </div>
+
+      {/* 이미지 확대 팝업 */}
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
     </div>
   );
 };

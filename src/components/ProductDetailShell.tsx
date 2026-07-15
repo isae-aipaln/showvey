@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { LayoutGrid, Plus, Trash2 } from "lucide-react";
+import ImageLightbox from "@/components/ImageLightbox";
 import { toast } from "sonner";
 import { db, storage } from "@/firebase";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from "firebase/firestore";
@@ -130,6 +131,8 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coordInputRef = useRef<HTMLInputElement>(null);
 
+  // 이미지 클릭 시 확대 팝업으로 표시할 이미지 URL (null이면 팝업 닫힘)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [purchaseIntent, setPurchaseIntent] = useState<string | undefined>(undefined);
   const [design, setDesign] = useState<string | undefined>(undefined);
   const [price, setPrice] = useState<string | undefined>(undefined);
@@ -512,7 +515,7 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
               >
                 {currentImages.map((src, i) => (
                   <div key={i} className="relative w-full shrink-0 snap-center rounded-lg overflow-hidden bg-white aspect-[2/3]">
-                    <img src={src} className="w-full h-full object-cover" alt={`coord-${i}`} />
+                    <img src={src} className="w-full h-full object-contain cursor-zoom-in" alt={`coord-${i}`} onClick={() => setLightboxSrc(src)} />
                   </div>
                 ))}
               </div>
@@ -648,6 +651,9 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
         )}
       </div>
       </div>
+
+      {/* 이미지 확대 팝업 */}
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
     </div>
   );
 };

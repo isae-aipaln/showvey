@@ -289,7 +289,7 @@ const GalleryPage = () => {
                     <img
                       src={product.thumbnailImage}
                       alt={product.styleCode}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-contain"
                       loading="lazy"
                     />
                     {/* 썸네일이 있을 때는 품번을 좌측 상단 순번 뱃지 아래에 표시 (모델 가림 방지, 썸네일 배경이 대부분 밝아 배경 투명 처리) */}
