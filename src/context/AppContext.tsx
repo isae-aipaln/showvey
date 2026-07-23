@@ -91,6 +91,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         let formattedProducts = productData.map((item: any) => ({
           id: item.Style_no,
           styleCode: item.Style_no,
+          displayNo: item.Display_no?.toString() || "",
           thumbnailImage: item.Thumbnail_url || "",
           name: item.Style_no,
           price: item.Sale_price,

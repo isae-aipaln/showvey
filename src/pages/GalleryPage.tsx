@@ -278,6 +278,8 @@ const GalleryPage = () => {
           {paginatedProducts.map((product) => {
             const isEvaluatedByMe = checkIsEvaluated(product.styleCode);
             const sequenceNumber = products.findIndex((p) => p.id === product.id) + 1;
+            // 갤러리 뱃지: 스타일팀 표시번호(예: 3, 12, 51-1)를 우선 표시, 없으면 기존 위치 번호로 폴백
+            const badgeLabel = product.displayNo ? String(product.displayNo) : String(sequenceNumber);
             return (
               <div
                 key={product.id}
@@ -292,10 +294,12 @@ const GalleryPage = () => {
                       className="h-full w-full object-contain"
                       loading="lazy"
                     />
-                    {/* 썸네일이 있을 때는 품번을 좌측 상단 순번 뱃지 아래에 표시 (모델 가림 방지, 썸네일 배경이 대부분 밝아 배경 투명 처리) */}
-                    <p className="absolute left-4 top-[3.25rem] z-10 max-w-[70%] truncate text-[10px] font-bold text-foreground">
-                      {product.styleCode}
-                    </p>
+                    {/* 품번 라벨 잠시 숨김 처리 (2026-07-23 요청, 사진 속 순번과 겹침). 다시 켜려면 false → true */}
+                    {false && (
+                      <p className="absolute left-4 top-4 z-10 max-w-[70%] truncate text-[10px] font-bold text-foreground">
+                        {product.styleCode}
+                      </p>
+                    )}
                   </>
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-white">
@@ -307,14 +311,17 @@ const GalleryPage = () => {
                     )}
                   </div>
                 )}
-                <div
-                  className={`absolute left-4 top-4 flex h-8 w-8 items-center justify-center rounded-full border text-sm font-bold ${isEvaluatedByMe
-                      ? "bg-[hsl(var(--eval-blue))] border-[hsl(var(--eval-blue))] text-white"
-                      : "bg-transparent border-foreground text-foreground"
-                    }`}
-                >
-                  {sequenceNumber}
-                </div>
+                {/* 순번 동그라미 뱃지 숨김 처리 (2026-07-23 요청). 다시 켜려면 false → true */}
+                {false && (
+                  <div
+                    className={`absolute left-4 top-4 flex h-8 min-w-[2rem] items-center justify-center rounded-full border px-1.5 font-bold ${badgeLabel.length >= 3 ? "text-xs" : "text-sm"} ${isEvaluatedByMe
+                        ? "bg-[hsl(var(--eval-blue))] border-[hsl(var(--eval-blue))] text-white"
+                        : "bg-transparent border-foreground text-foreground"
+                      }`}
+                  >
+                    {badgeLabel}
+                  </div>
+                )}
                 {userRole === "ADMIN" && (
                   <button
                     onClick={(e) => handleDelete(e, product.styleCode)}

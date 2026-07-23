@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { LayoutGrid, Plus, Trash2 } from "lucide-react";
+import { LayoutGrid, Plus, Trash2, ChevronLeft, ChevronRight, Expand, Heart } from "lucide-react";
 import ImageLightbox from "@/components/ImageLightbox";
 import { toast } from "sonner";
 import { db, storage } from "@/firebase";
@@ -73,6 +73,7 @@ export interface DbProduct {
   Add_labor_info: string | null;
   Etc_rawmat_info: string | null;
   MINI_DELI_Stock_preorder: string | null;
+  Product_desc?: string | null;
 }
 
 interface ProductDetailShellProps {
@@ -81,6 +82,9 @@ interface ProductDetailShellProps {
   detailTable?: React.ReactNode;
   isNew?: boolean;
 }
+
+// 코디평가 페이지 사용 여부 (2026-07-23 숨김 — 코디 이미지는 상품정보 슬라이더에 통합 노출). 복구하려면 true
+const COORDI_PAGE_ENABLED = false;
 
 const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: ProductDetailShellProps) => {
   // ⭐ URL 파라미터에서 styleCode를 직접 가져옵니다.
@@ -121,6 +125,11 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
 
   // 코디 이미지가 없는 스타일 여부 — 코디평가 페이지를 건너뛰고 바로 다음 스타일로 이동
   const hasNoCoordiImages = dbProduct !== null && currentCoordImages.length === 0;
+  // 코디평가 페이지 숨김 시 모든 스타일이 코디페이지 없이 다음 스타일로 이동
+  const skipCoordiPage = !COORDI_PAGE_ENABLED || hasNoCoordiImages;
+
+  // 상품정보 슬라이더에 표시할 이미지: 단품 + 코디 통합 (코디평가 페이지 숨김에 따라)
+  const sliderImages = [...currentImages, ...currentCoordImages];
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -133,10 +142,41 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
 
   // 이미지 클릭 시 확대 팝업으로 표시할 이미지 URL (null이면 팝업 닫힘)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  // PC 화살표 클릭 시 해당 인덱스 이미지로 스크롤 (표시 상태는 즉시 갱신, 스크롤은 부드럽게 따라감)
+  const scrollToImage = (i: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const clamped = Math.max(0, Math.min(i, sliderImages.length - 1));
+    setActiveImage(clamped);
+    el.scrollTo({ left: clamped * el.clientWidth, behavior: "smooth" });
+  };
+
+  // 스타일 이동 시 슬라이더를 첫 이미지로 리셋 (순번 표시가 남는 것 방지)
+  useEffect(() => {
+    setActiveImage(0);
+    scrollRef.current?.scrollTo({ left: 0 });
+  }, [urlStyleCode]);
+
+  // 현재 보고 있는 슬라이더 이미지의 좋아요 토글
+  const currentSliderUrl = sliderImages[Math.min(activeImage, Math.max(sliderImages.length - 1, 0))];
+  const toggleCurrentLike = () => {
+    if (!currentSliderUrl) return;
+    setLikedUrls((prev) => {
+      const next = new Set(prev);
+      if (next.has(currentSliderUrl)) next.delete(currentSliderUrl);
+      else next.add(currentSliderUrl);
+      return next;
+    });
+    setLikesDirty(true);
+  };
   const [purchaseIntent, setPurchaseIntent] = useState<string | undefined>(undefined);
   const [design, setDesign] = useState<string | undefined>(undefined);
   const [price, setPrice] = useState<string | undefined>(undefined);
   const [comment, setComment] = useState<string>("");
+  // 이미지 좋아요 (코디평가 페이지의 하트를 상품정보 슬라이더로 이동) — Liked_images 필드에 URL 배열로 저장
+  const [likedUrls, setLikedUrls] = useState<Set<string>>(new Set());
+  const [likesDirty, setLikesDirty] = useState(false);   // 하트를 눌렀다 뗀 것만으로도 저장되도록
   const [editableStyleCode, setEditableStyleCode] = useState(urlStyleCode || "");
 
   // --- [데이터 페칭] ---
@@ -193,9 +233,12 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
       } else if (userRole === "STORE") {
         setDesign(ex.Order_count ?? undefined);
       }
+      setLikedUrls(new Set(Array.isArray(ex.Liked_images) ? ex.Liked_images : []));
     } else {
       setComment("");
+      setLikedUrls(new Set());
     }
+    setLikesDirty(false);
   }, [urlStyleCode, evaluations, isNew, currentUser, userRole]);
 
   const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,9 +252,9 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    const remainingSlots = 6 - currentImages.length;
+    const remainingSlots = 15 - currentImages.length;
     if (remainingSlots <= 0) {
-      toast.error("단품 이미지는 최대 6개까지만 등록 가능합니다.");
+      toast.error("단품 이미지는 최대 15개까지만 등록 가능합니다.");
       return;
     }
     const allowedFiles = files.slice(0, remainingSlots);
@@ -309,14 +352,17 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
     let payload: Record<string, any>;
     if (userRole === "STORE") {
       hasInput = !!(price || design || trimmedComment);
-      payload = { Style_no: sc, Evaluator_ID: currentUser, Price: price, Order_count: design, Comment: trimmedComment || null, Project_name: currentProjectName };
+      payload = { Style_no: sc, Evaluator_ID: currentUser, Price: price ?? null, Order_count: design ?? null, Comment: trimmedComment || null, Project_name: currentProjectName };
     } else if (userRole === "STAFF_2") {
       hasInput = !!(price || purchaseIntent || trimmedComment);
-      payload = { Style_no: sc, Evaluator_ID: currentUser, Price: price, Purchase_intent: purchaseIntent, Comment: trimmedComment || null, Project_name: currentProjectName };
+      payload = { Style_no: sc, Evaluator_ID: currentUser, Price: price ?? null, Purchase_intent: purchaseIntent ?? null, Comment: trimmedComment || null, Project_name: currentProjectName };
     } else {
       hasInput = !!trimmedComment;
       payload = { Style_no: sc, Evaluator_ID: currentUser, Comment: trimmedComment, Project_name: currentProjectName };
     }
+    // 이미지 좋아요 기록 (하트만 눌러도 저장되도록 hasInput에 포함)
+    payload.Liked_images = Array.from(likedUrls);
+    hasInput = hasInput || likesDirty;
 
     if (!hasInput) return { ok: true };
     if (!ensureAuthed()) return { ok: false };
@@ -343,21 +389,23 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
     const evalDocId = `${currentUser}_${sc}`;
     const evalRef = doc(db, "evaluations", evalDocId);
 
+    const likedArr = Array.from(likedUrls);
     if (userRole === "STORE") {
       const trimmedComment = comment.trim();
-      if (price || design || trimmedComment) {
+      if (price || design || trimmedComment || likesDirty) {
         if (!ensureAuthed()) return;
         try {
           toast.loading("평가 저장 중...", { id: "eval-save-next" });
           await setDoc(evalRef, {
             Style_no: sc,
             Evaluator_ID: currentUser,
-            Price: price,
-            Order_count: design,
+            Price: price ?? null,
+            Order_count: design ?? null,
             Comment: trimmedComment || null,
+            Liked_images: likedArr,
             Project_name: currentProjectName,
           }, { merge: true });
-          updateEvaluation({ Style_no: sc, Evaluator_ID: currentUser, Price: price, Order_count: design, Comment: trimmedComment || null, Project_name: currentProjectName });
+          updateEvaluation({ Style_no: sc, Evaluator_ID: currentUser, Price: price ?? null, Order_count: design ?? null, Comment: trimmedComment || null, Liked_images: likedArr, Project_name: currentProjectName });
           markProductEvaluated(product.id);
           toast.dismiss("eval-save-next");
         } catch {
@@ -368,19 +416,20 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
       }
     } else if (userRole === "STAFF_2") {
       const trimmedComment = comment.trim();
-      if (price || purchaseIntent || trimmedComment) {
+      if (price || purchaseIntent || trimmedComment || likesDirty) {
         if (!ensureAuthed()) return;
         try {
           toast.loading("평가 저장 중...", { id: "eval-save-next" });
           await setDoc(evalRef, {
             Style_no: sc,
             Evaluator_ID: currentUser,
-            Price: price,
-            Purchase_intent: purchaseIntent,
+            Price: price ?? null,
+            Purchase_intent: purchaseIntent ?? null,
             Comment: trimmedComment || null,
+            Liked_images: likedArr,
             Project_name: currentProjectName,
           }, { merge: true });
-          updateEvaluation({ Style_no: sc, Evaluator_ID: currentUser, Price: price, Purchase_intent: purchaseIntent, Comment: trimmedComment || null, Project_name: currentProjectName });
+          updateEvaluation({ Style_no: sc, Evaluator_ID: currentUser, Price: price ?? null, Purchase_intent: purchaseIntent ?? null, Comment: trimmedComment || null, Liked_images: likedArr, Project_name: currentProjectName });
           markProductEvaluated(product.id);
           toast.dismiss("eval-save-next");
         } catch {
@@ -391,7 +440,7 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
       }
     } else {
       const trimmedComment = comment.trim();
-      if (trimmedComment) {
+      if (trimmedComment || likesDirty) {
         if (!ensureAuthed()) return;
         try {
           toast.loading("평가 저장 중...", { id: "eval-save-next" });
@@ -399,9 +448,10 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
             Style_no: sc,
             Evaluator_ID: currentUser,
             Comment: trimmedComment,
+            Liked_images: likedArr,
             Project_name: currentProjectName,
           }, { merge: true });
-          updateEvaluation({ Style_no: sc, Evaluator_ID: currentUser, Comment: trimmedComment, Project_name: currentProjectName });
+          updateEvaluation({ Style_no: sc, Evaluator_ID: currentUser, Comment: trimmedComment, Liked_images: likedArr, Project_name: currentProjectName });
           markProductEvaluated(product.id);
           toast.dismiss("eval-save-next");
         } catch {
@@ -513,17 +563,65 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
                 className="flex h-full snap-x snap-mandatory overflow-x-auto"
                 style={{ scrollbarWidth: "none" }}
               >
-                {currentImages.map((src, i) => (
+                {sliderImages.map((src, i) => (
                   <div key={i} className="relative w-full shrink-0 snap-center rounded-lg overflow-hidden bg-white aspect-[2/3]">
                     <img src={src} className="w-full h-full object-contain cursor-zoom-in" alt={`coord-${i}`} onClick={() => setLightboxSrc(src)} />
                   </div>
                 ))}
               </div>
               <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5">
-                {currentImages.map((_, i) => (
+                {sliderImages.map((_, i) => (
                   <div key={i} className={`h-1.5 w-1.5 rounded-full ${i === activeImage ? "bg-primary" : "bg-muted"}`} />
                 ))}
               </div>
+              {/* 이미지 순번 표시: 현재/전체 */}
+              {sliderImages.length > 0 && (
+                <div className="absolute right-2 top-2 rounded-full bg-foreground/60 px-2.5 py-1 text-xs font-medium text-background">
+                  {Math.min(activeImage, sliderImages.length - 1) + 1}/{sliderImages.length}
+                </div>
+              )}
+              {/* 좋아요 버튼: 현재 이미지에 하트 (크게보기 위) — Liked_images로 평가에 기록 */}
+              {sliderImages.length > 0 && userRole !== "ADMIN" && (
+                <button
+                  onClick={toggleCurrentLike}
+                  className="absolute bottom-11 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 shadow-md"
+                  aria-label="이미지 좋아요"
+                >
+                  <Heart className={`h-5 w-5 ${currentSliderUrl && likedUrls.has(currentSliderUrl) ? "fill-black text-black" : "text-black"}`} />
+                </button>
+              )}
+              {/* 크게보기 버튼: 현재 이미지를 확대 팝업으로 */}
+              {sliderImages.length > 0 && (
+                <button
+                  onClick={() => setLightboxSrc(sliderImages[Math.min(activeImage, sliderImages.length - 1)])}
+                  className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-foreground/60 px-2.5 py-1 text-xs font-medium text-background"
+                  aria-label="이미지 크게보기"
+                >
+                  <Expand className="h-3.5 w-3.5" />
+                  크게보기
+                </button>
+              )}
+              {/* PC 전용 좌우 화살표 (모바일은 스와이프 유지) */}
+              {sliderImages.length > 1 && (
+                <>
+                  <button
+                    onClick={() => scrollToImage(activeImage - 1)}
+                    disabled={activeImage <= 0}
+                    className="hidden lg:flex absolute left-2 top-1/2 -translate-y-1/2 h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-md disabled:opacity-30"
+                    aria-label="이전 이미지"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => scrollToImage(activeImage + 1)}
+                    disabled={activeImage >= sliderImages.length - 1}
+                    className="hidden lg:flex absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-md disabled:opacity-30"
+                    aria-label="다음 이미지"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )
@@ -618,8 +716,8 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
               >
                 &lt; 이전 스타일
               </button>
-              {/* 코디 이미지 없을 때: 코디페이지 없이 다음 스타일로 바로 이동 / 코디 이미지 있을 때: 기존 스타일링 선호도 버튼 */}
-              {hasNoImages || hasNoCoordiImages ? (
+              {/* 코디평가 숨김/코디 이미지 없음: 코디페이지 없이 다음 스타일로 바로 이동 / 그 외: 기존 스타일링 선호도 버튼 */}
+              {hasNoImages || skipCoordiPage ? (
                 <button
                   onClick={handleNoImageNextStyle}
                   className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground"

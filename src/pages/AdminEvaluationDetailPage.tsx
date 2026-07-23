@@ -18,6 +18,8 @@ import { normalizeStyleNo } from "@/lib/utils";
 const CSV_MAPPING: Record<string, keyof ProductRow> = {
   품번: "styleNo",
   Style_no: "styleNo",
+  표시번호: "displayNo",
+  Display_no: "displayNo",
   썸네일: "thumbnail",
   Thumbnail_url: "thumbnail",
   단품이미지: "productImages",
@@ -55,6 +57,8 @@ const CSV_MAPPING: Record<string, keyof ProductRow> = {
   Etc_rawmat_info: "otherMaterialInfo",
   "MINI/DELI_재고/선발주": "miniDeliStock",
   MINI_DELI_Stock_preorder: "miniDeliStock",
+  상품설명: "productDesc",
+  Product_desc: "productDesc",
 };
 
 interface ColumnDef {
@@ -68,6 +72,7 @@ interface ProductRow {
   id: string;
   selected: boolean;
   styleNo: string;
+  displayNo: string;
   thumbnail: string[];
   productImages: string[];
   coordiImages: string[];
@@ -89,12 +94,14 @@ interface ProductRow {
   addLaborInfo: string;
   otherMaterialInfo: string;
   miniDeliStock: string;
+  productDesc: string;   // 상품설명 — 관리자 테이블에는 비노출(성능), 데이터만 유지
 }
 
 const emptyRow = (): ProductRow => ({
   id: Math.random().toString(36).substr(2, 9),
   selected: false,
   styleNo: "",
+  displayNo: "",
   thumbnail: [],
   productImages: [],
   coordiImages: [],
@@ -116,13 +123,16 @@ const emptyRow = (): ProductRow => ({
   addLaborInfo: "",
   otherMaterialInfo: "",
   miniDeliStock: "",
+  productDesc: "",
 });
 
 const COLUMNS: ColumnDef[] = [
   { key: "styleNo", label: "품번" },
   { key: "thumbnail", label: "썸네일 (1)", type: "image", limit: 1 },
-  { key: "productImages", label: "단품이미지 (4)", type: "image", limit: 4 },
-  { key: "coordiImages", label: "코디이미지 (6)", type: "image", limit: 6 },
+  { key: "productImages", label: "단품이미지 (15)", type: "image", limit: 15 },
+  // 코디이미지 컬럼 삭제 (2026-07-23 — 코디평가 페이지 숨김에 따라 상품정보 슬라이더로 통합).
+  // 데이터(Coord_image_urls)는 ZIP 업로드·저장 로직에서 계속 유지됨
+  // { key: "coordiImages", label: "코디이미지 (6)", type: "image", limit: 6 },
   { key: "price", label: "판매가" },
   { key: "fabricName", label: "원단명" },
   { key: "composition", label: "혼용률" },
@@ -160,6 +170,8 @@ const AdminEvaluationDetailPage = () => {
   const csvInputRef = useRef<HTMLInputElement>(null);
   const zipInputRef = useRef<HTMLInputElement>(null);
   const [activeUpload, setActiveUpload] = useState<{ rowId: string; type: any; limit: number } | null>(null);
+  // 이미지 드래그 정렬: 드래그 중인 이미지 (행/컬럼/인덱스)
+  const [dragInfo, setDragInfo] = useState<{ rowId: string; type: string; index: number } | null>(null);
 
   const calculateAutoStatus = (start: string, end: string) => {
     if (!start || !end) return false;
@@ -243,9 +255,11 @@ const AdminEvaluationDetailPage = () => {
             id: Math.random().toString(36).substr(2, 9),
             selected: false,
             styleNo: doc.id || "",
+            displayNo: item.Display_no?.toString() || "",
             thumbnail: item.Thumbnail_url ? [item.Thumbnail_url] : [],
             productImages: item.Product_image_urls || [],
             coordiImages: item.Coord_image_urls || [],
+            productDesc: item.Product_desc || "",
             thumbnailFile: null,
             productImageFiles: [],
             coordiImageFiles: [],
@@ -354,10 +368,10 @@ const AdminEvaluationDetailPage = () => {
   const handleTemplateDownload = async () => {
     // \uC0C1\uD488\uC815\uBCF4 \uC5C5\uB85C\uB4DC \uC591\uC2DD(xlsx) \u2014 \uCEEC\uB7FC \uC21C\uC11C/\uBA85\uCE6D\uC740 \uC0C1\uD488\uC815\uBCF4_\uC5C5\uB85C\uB4DC_\uC591\uC2DD.xlsx \uAE30\uC900
     const headers = [
-      "sort_order", "Style_no", "Thumbnail_url", "Product_image_urls", "Sale_price",
+      "sort_order", "Style_no", "Display_no", "Thumbnail_url", "Product_image_urls", "Sale_price",
       "Fabric_name", "Composition", "Fabric_width", "Unit_cost", "Markup", "Consumption",
       "Raw_material_cost", "Sub_material_cost", "Special_trim_cost", "Labor_cost", "Mfg_cost",
-      "Add_labor_info", "Etc_rawmat_info", "MINI_DELI_Stock_preorder", "Coord_image_urls",
+      "Add_labor_info", "Etc_rawmat_info", "MINI_DELI_Stock_preorder", "Product_desc",
     ];
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Sheet1");
@@ -432,6 +446,7 @@ const AdminEvaluationDetailPage = () => {
         const res = uploadResults.get(i);
         const item = {
           Style_no: normalized,
+          Display_no: row.displayNo || "",
           Project_name: evaluationName,
           Thumbnail_url: res.thumbnail || row.thumbnail[0] || "",
           Product_image_urls: [...row.productImages.filter(u => u.startsWith("http")), ...res.products],
@@ -451,6 +466,7 @@ const AdminEvaluationDetailPage = () => {
           Add_labor_info: row.addLaborInfo,
           Etc_rawmat_info: row.otherMaterialInfo,
           MINI_DELI_Stock_preorder: row.miniDeliStock,
+          Product_desc: row.productDesc || "",
           sort_order: i,
         };
         batch.set(doc(db, "products", normalized), item, { merge: true });
@@ -570,6 +586,8 @@ const AdminEvaluationDetailPage = () => {
               if (rowData.thumbnail.length === 0) rowData.thumbnail = ex.thumbnail;
               if (rowData.productImages.length === 0) rowData.productImages = ex.productImages;
               if (rowData.coordiImages.length === 0) rowData.coordiImages = ex.coordiImages;
+              // 엑셀에 상품설명 컬럼이 없거나 비어있으면 기존 설명 유지 (재업로드 시 유실 방지)
+              if (!rowData.productDesc) rowData.productDesc = ex.productDesc || "";
               rowData.thumbnailFile = ex.thumbnailFile;
               rowData.productImageFiles = ex.productImageFiles;
               rowData.coordiImageFiles = ex.coordiImageFiles;
@@ -624,7 +642,7 @@ const AdminEvaluationDetailPage = () => {
           const url = URL.createObjectURL(final);
           const row = { ...tempRows[rowIndex] };
           if (category === "thumbnail") { row.thumbnail = [url]; row.thumbnailFile = final; }
-          else if (category === "product" && row.productImages.length < 4) { row.productImages = [...row.productImages, url]; row.productImageFiles = [...(row.productImageFiles || []), final]; }
+          else if (category === "product" && row.productImages.length < 15) { row.productImages = [...row.productImages, url]; row.productImageFiles = [...(row.productImageFiles || []), final]; }
           else if (category === "coordi" && row.coordiImages.length < 6) { row.coordiImages = [...row.coordiImages, url]; row.coordiImageFiles = [...(row.coordiImageFiles || []), final]; }
           tempRows[rowIndex] = row;
         }
@@ -665,16 +683,51 @@ const AdminEvaluationDetailPage = () => {
     }));
   };
 
+  // 이미지 드래그 정렬: dragInfo의 이미지를 같은 행·같은 컬럼의 toIndex 위치로 이동.
+  // 새로 추가된(blob) 이미지는 파일 목록과의 대응이 어긋나지 않도록 함께 재정렬한다.
+  const handleReorderImage = (rowId: string, type: string, toIndex: number) => {
+    if (!dragInfo || dragInfo.rowId !== rowId || dragInfo.type !== type) return;
+    const from = dragInfo.index;
+    setDragInfo(null);
+    if (from === toIndex) return;
+    const fileKey = type === "productImages" ? "productImageFiles" : type === "coordiImages" ? "coordiImageFiles" : null;
+    if (!fileKey) return;   // 썸네일(1장)은 정렬 불필요
+    setRows(prev => prev.map(r => {
+      if (r.id !== rowId) return r;
+      const oldUrls = (r as any)[type] as string[];
+      if (from >= oldUrls.length) return r;
+      const newUrls = [...oldUrls];
+      const [moved] = newUrls.splice(from, 1);
+      newUrls.splice(Math.min(toIndex, newUrls.length), 0, moved);
+      // blob URL ↔ File 대응 유지 (기존 blob 순서 = 파일 목록 순서)
+      const files = ((r as any)[fileKey] as File[] | undefined) || [];
+      const oldBlobs = oldUrls.filter(u => !u.startsWith("http"));
+      const blobToFile = new Map(oldBlobs.map((u, i) => [u, files[i]]));
+      const newFiles = newUrls.filter(u => !u.startsWith("http")).map(u => blobToFile.get(u)).filter(Boolean) as File[];
+      return { ...r, [type]: newUrls, [fileKey]: newFiles };
+    }));
+  };
+
   const renderImageCell = (row: ProductRow, type: any, limit: number) => {
     const images = (row as any)[type] as string[];
     const rowIndex = rows.findIndex(r => r.id === row.id);
     const deleteType = type === "productImages" ? "product" : type === "coordiImages" ? "coordi" : "thumbnail";
+    const sortable = type !== "thumbnail";
 
     return (
       <div className="flex items-center gap-1.5 min-w-[80px]">
         {images.map((url, i) => (
-          <div key={url + i} className="relative h-10 w-10 rounded border border-slate-200 overflow-hidden shrink-0 group">
-            <img src={url} alt="" className="h-full w-full object-cover" />
+          <div
+            key={url + i}
+            draggable={sortable}
+            onDragStart={sortable ? () => setDragInfo({ rowId: row.id, type, index: i }) : undefined}
+            onDragEnd={sortable ? () => setDragInfo(null) : undefined}
+            onDragOver={sortable ? (e) => { e.preventDefault(); } : undefined}
+            onDrop={sortable ? (e) => { e.preventDefault(); handleReorderImage(row.id, type, i); } : undefined}
+            className={`relative h-10 w-10 rounded border border-slate-200 overflow-hidden shrink-0 group${sortable ? " cursor-grab active:cursor-grabbing" : ""}${dragInfo && dragInfo.rowId === row.id && dragInfo.type === type && dragInfo.index === i ? " opacity-40 ring-2 ring-blue-400" : ""}`}
+            title={sortable ? "드래그해서 순서 변경" : undefined}
+          >
+            <img src={url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover pointer-events-none" />
             <button onClick={() => handleDeleteImage(rowIndex, deleteType, i, url)} className="absolute top-0.5 right-0.5 bg-red-500/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
           </div>
         ))}
@@ -683,7 +736,15 @@ const AdminEvaluationDetailPage = () => {
             onClick={() => { setActiveUpload({ rowId: row.id, type, limit }); fileInputRef.current?.click(); }}
             onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add("bg-blue-50"); }}
             onDragLeave={e => { e.preventDefault(); e.currentTarget.classList.remove("bg-blue-50"); }}
-            onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove("bg-blue-50"); handleDropFiles(Array.from(e.dataTransfer.files), row.id, type, limit); }}
+            onDrop={e => {
+              e.preventDefault(); e.currentTarget.classList.remove("bg-blue-50");
+              // 내부 이미지 드래그를 + 버튼에 놓으면 맨 뒤로 이동, 외부 파일 드롭이면 기존 업로드 동작
+              if (dragInfo && dragInfo.rowId === row.id && dragInfo.type === type) {
+                handleReorderImage(row.id, type, images.length - 1);
+              } else {
+                handleDropFiles(Array.from(e.dataTransfer.files), row.id, type, limit);
+              }
+            }}
             className="h-10 w-10 rounded border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 shrink-0 hover:border-slate-400 transition-colors"
           ><Plus size={14} /></button>
         )}

@@ -26,9 +26,13 @@ const GuestSummaryTable = ({ dbProduct }: { dbProduct: DbProduct | null }) => {
           <td className="w-24 border-r border-foreground px-3 py-2 font-medium text-muted-foreground">판매가</td>
           <td className="px-3 py-2">{fmt(p?.Sale_price)}</td>
         </tr>
-        <tr>
+        <tr className="border-b border-foreground">
           <td className="border-r border-foreground px-3 py-2 font-medium text-muted-foreground">혼용률</td>
           <td className="px-3 py-2">{p?.Composition ?? "-"}</td>
+        </tr>
+        <tr>
+          <td className="border-r border-foreground px-3 py-2 font-medium text-muted-foreground">상품설명</td>
+          <td className="px-3 py-2 whitespace-pre-wrap break-all">{p?.Product_desc || "-"}</td>
         </tr>
       </tbody>
     </table>

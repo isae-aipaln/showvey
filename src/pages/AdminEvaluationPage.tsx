@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import ExcelJS from "exceljs";
+import { urlToSmallImage } from "@/lib/exportComments";
 import { useAppContext } from "@/context/AppContext";
 import { db, storage } from "@/firebase";
 import { collection, getDocs, query, orderBy, deleteDoc, doc, where, writeBatch } from "firebase/firestore";
@@ -200,39 +202,99 @@ const AdminEvaluationPage = () => {
         return;
       }
 
-      // 2. CSV 데이터 구성 (한글 깨짐 방지 BOM 추가)
-      const headers = ["ROLE", "ID", "품번", "구매 의사", "희망주문량", "가격", "총평", "좋아요 이미지"];
-      const csvRows = [
-        headers.join(","),
-        ...data.map((row: any) => {
-          const likedImages = Array.isArray(row.Liked_images) ? row.Liked_images.join(" ; ") : "";
-          const userRole = userRoleMap[row.Evaluator_ID] || "";
+      // 2. 엑셀(xlsx) 구성 — 좋아요 이미지를 실제 이미지로 삽입 (파일명/URL은 서버에만 보관)
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("평가결과");
+      sheet.columns = [
+        { header: "ROLE", key: "role", width: 10 },
+        { header: "ID", key: "id", width: 20 },
+        { header: "품번", key: "style", width: 18 },
+        { header: "구매 의사", key: "pi", width: 10 },
+        { header: "희망주문량", key: "oc", width: 11 },
+        { header: "가격", key: "price", width: 8 },
+        { header: "총평", key: "comment", width: 50 },
+        { header: "좋아요 수", key: "likeCount", width: 9 },
+        { header: "좋아요 이미지", key: "likeImages", width: 22 },
+      ];
+      sheet.getRow(1).font = { bold: true };
+      sheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
 
-          return [
-            `"${userRole}"`,
-            row.id,
-            `"${row.Style_no}"`,
-            `"${row.Purchase_intent || ""}"`,
-            `"${row.Order_count || ""}"`,
-            `"${row.Price || ""}"`,
-            `"${(row.Comment || "").replace(/"/g, '""')}"`,
-            `"${likedImages}"`,
-          ].join(",");
-        }),
-      ].join("\n");
+      const LIKE_H = 180;       // 삽입 이미지 높이(px)
+      const LIKE_ROW_PT = 140;  // 좋아요 있는 행 높이(pt)
+      // 같은 이미지는 한 번만 넣고 재사용 (파일 크기 억제)
+      const imgIdCache = new Map<string, number | null>();
+      const imgDimCache = new Map<string, { width: number; height: number }>();
 
-      // 3. 파일 다운로드 실행
-      const blob = new Blob(["\ufeff" + csvRows], { type: "text/csv;charset=utf-8;" });
+      // 고유 좋아요 이미지를 6장씩 병렬로 선다운로드 (한 장씩 순차 다운로드하면 느려서)
+      const uniqueUrls = [...new Set((data as any[]).flatMap((r) => (Array.isArray(r.Liked_images) ? r.Liked_images : [])))] as string[];
+      const CONC = 6;
+      for (let i = 0; i < uniqueUrls.length; i += CONC) {
+        const chunk = uniqueUrls.slice(i, i + CONC);
+        toast.loading(`좋아요 이미지 처리 중... (${Math.min(i + CONC, uniqueUrls.length)}/${uniqueUrls.length})`, { id: "csv-download" });
+        const results = await Promise.all(chunk.map((u) => urlToSmallImage(u, LIKE_H)));
+        results.forEach((img, j) => {
+          const u = chunk[j];
+          if (img) {
+            imgIdCache.set(u, workbook.addImage({ buffer: img.buffer, extension: "jpeg" }));
+            imgDimCache.set(u, { width: img.width, height: img.height });
+          } else {
+            imgIdCache.set(u, null);
+          }
+        });
+      }
+
+      toast.loading("엑셀 생성 중...", { id: "csv-download" });
+      let currentRow = 2;
+      for (const row of data as any[]) {
+        const likedArr: string[] = Array.isArray(row.Liked_images) ? row.Liked_images : [];
+        const rowCount = Math.max(1, likedArr.length);
+        const startRow = currentRow;
+        const vals: any[] = [
+          userRoleMap[row.Evaluator_ID] || "",
+          row.id,
+          row.Style_no || "",
+          row.Purchase_intent || "",
+          row.Order_count || "",
+          row.Price || "",
+          row.Comment || "",
+          likedArr.length || null,
+        ];
+        ["A", "B", "C", "D", "E", "F", "G", "H"].forEach((colL, ci) => {
+          const cell = sheet.getCell(`${colL}${startRow}`);
+          cell.value = vals[ci];
+          cell.alignment = { vertical: "middle", horizontal: colL === "G" ? "left" : "center", wrapText: true };
+          if (rowCount > 1) sheet.mergeCells(`${colL}${startRow}:${colL}${startRow + rowCount - 1}`);
+        });
+        if (likedArr.length > 0) {
+          for (let i = 0; i < rowCount; i++) sheet.getRow(startRow + i).height = LIKE_ROW_PT;
+        }
+        // 좋아요 이미지 삽입 (I열, 세로로 쌓음) — 선다운로드된 캐시만 사용
+        for (let i = 0; i < likedArr.length; i++) {
+          const imageId = imgIdCache.get(likedArr[i]);
+          if (imageId === null || imageId === undefined) continue;
+          const dim = imgDimCache.get(likedArr[i])!;
+          sheet.addImage(imageId, {
+            tl: { col: 8.05, row: startRow + i - 1 + 0.05 } as any,
+            ext: { width: dim.width, height: dim.height },
+            editAs: "oneCell",
+          });
+        }
+        currentRow += rowCount;
+      }
+
+      // 3. 파일 다운로드 실행 (xlsx)
+      const buf = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${projectName}_평가결과.csv`);
+      link.setAttribute("download", `${projectName}_평가결과.xlsx`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
       toast.dismiss("csv-download");
-      toast.success("CSV 파일 다운로드가 완료되었습니다.");
+      toast.success("평가결과 엑셀 다운로드가 완료되었습니다.");
     } catch (err) {
       console.error("CSV Download Error:", err);
       toast.dismiss("csv-download");

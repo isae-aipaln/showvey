@@ -59,6 +59,12 @@ const StaffInfoSection = ({ drawerOpen, dbProduct }: { drawerOpen: boolean; dbPr
             </td>
             <td className="border border-muted-foreground/40 px-3 py-2 text-foreground text-center">{p?.Composition ?? "-"}</td>
           </tr>
+          <tr>
+            <td className="border border-muted-foreground/40 px-3 py-2 text-muted-foreground font-medium w-1/4 bg-muted/30">
+              상품설명
+            </td>
+            <td className="border border-muted-foreground/40 px-3 py-2 text-foreground text-left whitespace-pre-wrap break-all">{p?.Product_desc || "-"}</td>
+          </tr>
         </tbody>
       </table>
       </div>
