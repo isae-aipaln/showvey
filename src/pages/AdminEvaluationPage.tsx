@@ -210,7 +210,7 @@ const AdminEvaluationPage = () => {
         { header: "ID", key: "id", width: 20 },
         { header: "품번", key: "style", width: 18 },
         { header: "구매 의사", key: "pi", width: 10 },
-        { header: "희망주문량", key: "oc", width: 11 },
+        { header: "예상판매수량", key: "oc", width: 12 },
         { header: "가격", key: "price", width: 8 },
         { header: "총평", key: "comment", width: 50 },
         { header: "좋아요 수", key: "likeCount", width: 9 },

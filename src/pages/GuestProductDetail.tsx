@@ -13,6 +13,10 @@ const getCategory = (styleNo?: string) => {
   return categoryMap[styleNo.charAt(4).toUpperCase()] ?? "-";
 };
 
+// 상품설명을 문장(마침표) 단위로 나눠 한 문장씩 줄바꿈 표시
+const splitSentences = (text?: string | null): string[] =>
+  (text || "").split(/(?<=[.!?])\s+|(?<=니다)\s+/).map((s) => s.trim()).filter(Boolean);
+
 const GuestSummaryTable = ({ dbProduct }: { dbProduct: DbProduct | null }) => {
   const p = dbProduct;
   return (
@@ -32,7 +36,13 @@ const GuestSummaryTable = ({ dbProduct }: { dbProduct: DbProduct | null }) => {
         </tr>
         <tr>
           <td className="border-r border-foreground px-3 py-2 font-medium text-muted-foreground">상품설명</td>
-          <td className="px-3 py-2 whitespace-pre-wrap break-all">{p?.Product_desc || "-"}</td>
+          <td className="px-3 py-2 break-keep break-words leading-relaxed">
+            {splitSentences(p?.Product_desc).length > 0
+              ? splitSentences(p?.Product_desc).map((s, i) => (
+                  <p key={i}>{s}</p>
+                ))
+              : "-"}
+          </td>
         </tr>
       </tbody>
     </table>

@@ -17,6 +17,10 @@ const getCategory = (styleNo?: string) => {
   return categoryMap[styleNo.charAt(4).toUpperCase()] ?? "-";
 };
 
+// 상품설명을 문장(마침표) 단위로 나눠 한 문장씩 줄바꿈 표시
+const splitSentences = (text?: string | null): string[] =>
+  (text || "").split(/(?<=[.!?])\s+|(?<=니다)\s+/).map((s) => s.trim()).filter(Boolean);
+
 const StaffInfoSection = ({ drawerOpen, dbProduct }: { drawerOpen: boolean; dbProduct: DbProduct | null }) => {
   const { userRole } = useAppContext();
   // 임직원1(STAFF_1)은 페이지 진입 시 상세정보가 자동으로 펼쳐진 상태로 시작 (접기 토글은 그대로 사용 가능)
@@ -63,7 +67,13 @@ const StaffInfoSection = ({ drawerOpen, dbProduct }: { drawerOpen: boolean; dbPr
             <td className="border border-muted-foreground/40 px-3 py-2 text-muted-foreground font-medium w-1/4 bg-muted/30">
               상품설명
             </td>
-            <td className="border border-muted-foreground/40 px-3 py-2 text-foreground text-left whitespace-pre-wrap break-all">{p?.Product_desc || "-"}</td>
+            <td className="border border-muted-foreground/40 px-3 py-2 text-foreground text-left break-keep break-words leading-relaxed">
+              {splitSentences(p?.Product_desc).length > 0
+                ? splitSentences(p?.Product_desc).map((s, i) => (
+                    <p key={i}>{s}</p>
+                  ))
+                : "-"}
+            </td>
           </tr>
         </tbody>
       </table>

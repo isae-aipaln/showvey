@@ -677,7 +677,7 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
                     hasError={showErrors && !price}
                   />
                   <EvalRow
-                    label="희망주문량"
+                    label="예상판매수량"
                     options={["2장이내", "5장이내", "10장이내"]}
                     selected={design}
                     onSelect={setDesign}
