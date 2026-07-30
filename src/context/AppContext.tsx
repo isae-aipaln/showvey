@@ -95,6 +95,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           thumbnailImage: item.Thumbnail_url || "",
           name: item.Style_no,
           price: item.Sale_price,
+          desc: item.Product_desc || "",
           productImages: item.Product_image_urls || [],
           coordiImages: item.Coord_image_urls || [],
           projectId: item.Project_name,

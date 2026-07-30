@@ -91,10 +91,26 @@ export default {
             height: "0",
           },
         },
+        // 코디 슬라이드 진입 시 하트 버튼 등장 모션 (존재감 표시)
+        "heart-in": {
+          "0%": { transform: "scale(0.5)", opacity: "0" },
+          "60%": { transform: "scale(1.15)", opacity: "1" },
+          "100%": { transform: "scale(1)", opacity: "1" },
+        },
+        // 피드 이미지 더블탭 좋아요 시 중앙에 뜨는 하트 팝 (인스타그램 스타일)
+        "heart-pop": {
+          "0%": { transform: "scale(0)", opacity: "0" },
+          "15%": { transform: "scale(1.2)", opacity: "1" },
+          "30%": { transform: "scale(0.95)" },
+          "45%, 80%": { transform: "scale(1)", opacity: "1" },
+          "100%": { transform: "scale(1.1)", opacity: "0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "heart-in": "heart-in 0.35s ease-out",
+        "heart-pop": "heart-pop 0.9s ease-in-out forwards",
       },
     },
   },

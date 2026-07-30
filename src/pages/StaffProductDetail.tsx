@@ -21,10 +21,19 @@ const getCategory = (styleNo?: string) => {
 const splitSentences = (text?: string | null): string[] =>
   (text || "").split(/(?<=[.!?])\s+|(?<=니다)\s+/).map((s) => s.trim()).filter(Boolean);
 
-const StaffInfoSection = ({ drawerOpen, dbProduct }: { drawerOpen: boolean; dbProduct: DbProduct | null }) => {
+export const StaffInfoSection = ({
+  drawerOpen,
+  dbProduct,
+  defaultDetailOpen,
+}: {
+  drawerOpen: boolean;
+  dbProduct: DbProduct | null;
+  /** 상세정보(원가) 초기 펼침 여부 — 미지정 시 기존 동작(STAFF_1은 펼침). 모바일 평가 시트는 false로 접어서 평가 입력이 먼저 보이게 */
+  defaultDetailOpen?: boolean;
+}) => {
   const { userRole } = useAppContext();
   // 임직원1(STAFF_1)은 페이지 진입 시 상세정보가 자동으로 펼쳐진 상태로 시작 (접기 토글은 그대로 사용 가능)
-  const [isDetailOpen, setIsDetailOpen] = useState(userRole === "STAFF_1");
+  const [isDetailOpen, setIsDetailOpen] = useState(defaultDetailOpen ?? userRole === "STAFF_1");
   const p = dbProduct;
 
   return (

@@ -10,6 +10,7 @@ import { ref, listAll, deleteObject } from "firebase/storage";
 import { normalizeStyleNo } from "@/lib/utils";
 import { exportCommentsToExcel, shareCommentsExcel } from "@/lib/exportComments";
 import { useIsDesktop, useIsDesktopViewport, getForceMobile, setForceMobile } from "@/hooks/use-desktop";
+import MobileHome from "@/components/mobile/MobileHome";
 
 const GalleryPage = () => {
   const { userRole, logout, products, evaluations, refreshData, isRandomized, userId } = useAppContext();
@@ -183,6 +184,11 @@ const GalleryPage = () => {
       {forceMobile ? <Monitor className="h-[18px] w-[18px]" /> : <Smartphone className="h-[18px] w-[18px]" />}
     </button>
   ) : null;
+
+  // 모바일(또는 PC의 '모바일 화면 보기') + 비ADMIN → 인스타그램형 셸 (PC·ADMIN은 기존 UI 그대로)
+  if (!isDesktop && userRole !== "ADMIN") {
+    return <MobileHome />;
+  }
 
   return (
     <div className="h-[100dvh] flex flex-col overflow-hidden bg-background">

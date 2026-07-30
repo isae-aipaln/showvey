@@ -130,9 +130,8 @@ const COLUMNS: ColumnDef[] = [
   { key: "styleNo", label: "품번" },
   { key: "thumbnail", label: "썸네일 (1)", type: "image", limit: 1 },
   { key: "productImages", label: "단품이미지 (15)", type: "image", limit: 15 },
-  // 코디이미지 컬럼 삭제 (2026-07-23 — 코디평가 페이지 숨김에 따라 상품정보 슬라이더로 통합).
-  // 데이터(Coord_image_urls)는 ZIP 업로드·저장 로직에서 계속 유지됨
-  // { key: "coordiImages", label: "코디이미지 (6)", type: "image", limit: 6 },
+  // 코디이미지 컬럼 복원 (2026-07-30 — 모바일 피드에서 코디이미지에만 좋아요를 띄우기 위해 카테고리 분리 재개)
+  { key: "coordiImages", label: "코디이미지 (6)", type: "image", limit: 6 },
   { key: "price", label: "판매가" },
   { key: "fabricName", label: "원단명" },
   { key: "composition", label: "혼용률" },

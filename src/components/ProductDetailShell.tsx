@@ -8,6 +8,7 @@ import { db, storage } from "@/firebase";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { normalizeStyleNo } from "@/lib/utils";
+import EvalRow from "@/components/EvalRow";
 
 // 이미지 업로드 로직
 const uploadImage = async (file: File, styleCode: string) => {
@@ -18,39 +19,6 @@ const uploadImage = async (file: File, styleCode: string) => {
   await uploadBytes(storageRef, file);
   return await getDownloadURL(storageRef);
 };
-
-interface EvalRowProps {
-  label: string;
-  options: string[];
-  selected: string | undefined;
-  onSelect: (val: string) => void;
-  hasError?: boolean;
-}
-
-const EvalRow = ({ label, options, selected, onSelect, hasError }: EvalRowProps) => (
-  <div className="flex items-center gap-2">
-    <span
-      className={`w-16 shrink-0 text-xs font-medium transition-colors ${hasError ? "text-destructive" : "text-foreground"}`}
-    >
-      {label}
-    </span>
-    <div className="flex flex-1 gap-1.5">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onSelect(opt)}
-          className={`flex-1 rounded-full border px-2 py-1.5 text-xs font-medium transition-colors ${
-            selected === opt
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-foreground bg-background text-foreground"
-          }`}
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
-  </div>
-);
 
 // ⭐ 모든 DB 컬럼 인터페이스 정의 (빌드 에러 해결)
 export interface DbProduct {
