@@ -172,22 +172,26 @@ const MobileHome = () => {
         <>
           {surface === "grid" && (
             <div className="pb-2">
-              {/* 인스타 탐색탭 스타일: 3열 엣지투엣지, 연회색 배경이 1px 간격으로 비쳐 경계선 역할. 썸네일이 앞판+뒷판 가로형 구도라 크롭 없이 contain 유지 */}
-              <div className="grid grid-cols-3 gap-[1px] border-y border-muted bg-muted">
+              {/* 인스타 탐색탭 스타일: 3열 엣지투엣지, 회색 배경이 1px 간격으로 비쳐 경계선 역할.
+                  흰 배경 썸네일끼리 붙어도 경계가 보이도록 구분선 색을 한 단계 진하게 */}
+              <div className="grid grid-cols-3 gap-[1px] border-y border-[#e2e2e0] bg-[#e2e2e0]">
                 {products.map((product, index) => {
                   const evaluated = isEvaluated(evaluations, product.styleCode, currentUser);
                   const badgeLabel = product.displayNo ? String(product.displayNo) : String(index + 1);
+                  // 갤러리 대표컷 = 썸네일 (2026-08 회의 확정안)
+                  const gridImage = product.thumbnailImage;
                   return (
                     <div
                       key={product.id}
                       onClick={() => openFeedAt(index)}
                       className="relative w-full aspect-[2/3] cursor-pointer overflow-hidden bg-white"
                     >
-                      {product.thumbnailImage ? (
+                      {gridImage ? (
                         <ResilientImage
-                          src={product.thumbnailImage}
+                          src={gridImage}
                           alt={product.styleCode}
                           className="object-contain"
+                          smartFill
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-muted/30">
@@ -200,8 +204,6 @@ const MobileHome = () => {
                           )}
                         </div>
                       )}
-                      {/* 평가완료 칸은 흰 워시로 가라앉혀 미평가(선명한 사진)가 즉시 도드라지게 — 남은 일 스캔용 */}
-                      {evaluated && <div className="pointer-events-none absolute inset-0 bg-white/50" />}
                       {/* 품평 순번 = 상태 표시 겸용: 미평가 검정 / 평가완료 파랑 (오버레이 1개로 통합, Apple식).
                           미디엄 굵기 + 흰 헤일로(지도앱식 가독성 확보) */}
                       <span

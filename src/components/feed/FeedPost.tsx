@@ -26,23 +26,27 @@ const FeedPost = ({ product, sequenceNumber, onOpenSheet }: FeedPostProps) => {
   // 뷰포트 600px 근처에 들어오면 나머지 캐러셀 이미지 마운트 (그 전에는 첫 이미지만)
   const { ref: postRef, inView: nearViewport } = useInView<HTMLDivElement>({ rootMargin: "600px", once: true });
 
-  const coordiSet = new Set<string>(product.coordiImages ?? []);
-  // 피드 슬라이드 = 단품 + 코디만. 썸네일 필드는 갤러리 그리드 전용 —
-  // 썸네일 컷은 단품 1번에도 중복 등록되므로 여기서 제외해야 같은 사진이 두 번 보이지 않음 (내용 비교 없이 구조적으로 중복 차단)
+  const badgeLabel = product.displayNo ? String(product.displayNo) : String(sequenceNumber);
+  // 피드 슬라이드 = [단품 → 코디] 순서 + 하단 썸네일 스트립 (2026-08 회의 확정안).
+  // 썸네일 필드는 갤러리 그리드 전용 — 단품에 중복 등록되므로 피드에서 제외해 중복 차단
   let images: string[] = Array.from(
     new Set([...(product.productImages ?? []), ...(product.coordiImages ?? [])].filter(Boolean)),
   );
   // 단품·코디가 하나도 없는 상품만 썸네일로 대체
   if (images.length === 0 && product.thumbnailImage) images = [product.thumbnailImage];
+  const showStrip = images.length > 1;
 
   const [activeIndex, setActiveIndex] = useState(0);
   const currentUrl = images[Math.min(activeIndex, Math.max(images.length - 1, 0))];
-  const currentIsCoordi = !!currentUrl && coordiSet.has(currentUrl);
 
-  // 좋아요: 코디이미지 URL 단위 (evaluations.Liked_images) — 하트 즉시 저장(디바운스)
+  // 좋아요: 모든 이미지 URL 단위 (evaluations.Liked_images) — 하트 즉시 저장(디바운스)
   const [likedUrls, setLikedUrls] = useState<Set<string>>(new Set());
   const [likesDirty, setLikesDirty] = useState(false);
   const [showHeartPop, setShowHeartPop] = useState(false);
+  // 중앙 하트가 우측 하단 하트 버튼으로 날아가는 이동량 (트리거 시점에 실측)
+  const [flyOffset, setFlyOffset] = useState({ x: 0, y: 0 });
+  const imageAreaRef = useRef<HTMLDivElement>(null);
+  const heartBtnRef = useRef<HTMLButtonElement>(null);
 
   // 컨텍스트의 평가 데이터가 (비동기 로드 등으로) 갱신되면 아직 조작 전인 경우에만 동기화
   useEffect(() => {
@@ -86,28 +90,44 @@ const FeedPost = ({ product, sequenceNumber, onOpenSheet }: FeedPostProps) => {
     setLikesDirty(true);
   };
 
-  const toggleCurrentLike = () => {
-    if (!currentUrl || !currentIsCoordi) return;
-    setLike(currentUrl, !likedUrls.has(currentUrl));
+  const triggerHeartPop = () => {
+    // 팝 하트(이미지 영역 중앙) → 하트 버튼 중심까지의 이동량 계산
+    const area = imageAreaRef.current?.getBoundingClientRect();
+    const btn = heartBtnRef.current?.getBoundingClientRect();
+    if (area && btn) {
+      const stripH = showStrip ? 60 : 0; // 썸네일 스트립 높이(3.75rem)만큼 이미지 중앙 보정
+      setFlyOffset({
+        x: btn.left + btn.width / 2 - (area.left + area.width / 2),
+        y: btn.top + btn.height / 2 - (area.top + (area.height - stripH) / 2),
+      });
+    } else {
+      setFlyOffset({ x: 0, y: 0 });
+    }
+    setShowHeartPop(true);
+    window.setTimeout(() => setShowHeartPop(false), 1050);
   };
 
-  // 더블탭 = 코디 슬라이드에서만 좋아요(항상 on) + 하트 팝. 싱글탭 동작 없음 (핀치줌으로 확대)
+  const toggleCurrentLike = () => {
+    if (!currentUrl) return;
+    const liking = !likedUrls.has(currentUrl);
+    setLike(currentUrl, liking);
+    if (liking) triggerHeartPop(); // 좋아요 등록 시에만 중앙 하트 팝 (해제 시에는 없음)
+  };
+
+  // 더블탭 = 현재 이미지 좋아요(항상 on) + 하트 팝. 싱글탭 동작 없음 (핀치줌으로 확대)
   const lastTap = useRef(0);
   const handleImageClick = (src: string) => {
     const now = performance.now();
     if (now - lastTap.current < 300) {
       lastTap.current = 0;
-      if (!coordiSet.has(src)) return;
       if (!likedUrls.has(src)) setLike(src, true);
-      setShowHeartPop(true);
-      window.setTimeout(() => setShowHeartPop(false), 900);
+      triggerHeartPop();
     } else {
       lastTap.current = now;
     }
   };
 
   const evaluated = isEvaluated(evaluations, product.styleCode, currentUser);
-  const badgeLabel = product.displayNo ? String(product.displayNo) : String(sequenceNumber);
   const isLiked = !!currentUrl && likedUrls.has(currentUrl);
 
   // 입력줄 표시: 평가 전이면 placeholder, 평가 후면 내 평가 요약 (DonePanel과 동일 규칙)
@@ -119,7 +139,8 @@ const FeedPost = ({ product, sequenceNumber, onOpenSheet }: FeedPostProps) => {
     if (userRole === "STAFF_2" && myEval.Purchase_intent) parts.push(`구매의사 ${myEval.Purchase_intent}`);
     if (userRole === "STORE" && myEval.Order_count) parts.push(`예상판매 ${myEval.Order_count}`);
     if (myEval.Comment) parts.push("총평 ✓");
-    return parts.length > 0 ? parts.join(" · ") : null;
+    // 입력 없이 열람만 한 경우도 완료로 표시
+    return parts.length > 0 ? parts.join(" · ") : "확인 완료";
   })();
   const entryLabel = userRole === "STAFF_1" ? "상품정보 보기 · 총평 작성하기" : "상품정보 보기 · 평가 작성하기";
 
@@ -142,8 +163,8 @@ const FeedPost = ({ product, sequenceNumber, onOpenSheet }: FeedPostProps) => {
         <span className="text-sm font-semibold tracking-tight">{product.styleCode}</span>
       </div>
 
-      {/* 이미지 캐러셀 + 코디 슬라이드 전용 하트 + 더블탭 하트 팝 */}
-      <div className="relative">
+      {/* 이미지 캐러셀 + 하트 버튼 + 좋아요 하트 팝 */}
+      <div className="relative" ref={imageAreaRef}>
         <FeedImageCarousel
           images={images}
           styleCode={product.styleCode}
@@ -151,13 +172,18 @@ const FeedPost = ({ product, sequenceNumber, onOpenSheet }: FeedPostProps) => {
           activeIndex={activeIndex}
           onActiveChange={setActiveIndex}
           onImageClick={handleImageClick}
+          showThumbStrip={showStrip}
+          likedUrls={likedUrls}
         />
-        {/* 하트 버튼: 코디이미지 슬라이드에서만 우측 하단 노출 — 슬라이드 진입 시 팝 등장 모션으로 존재감 표시 */}
-        {currentIsCoordi && (
+        {/* 하트 버튼: 모든 이미지에서 우측 하단 노출. 존재감 모션(heart-in)은 포스트 최초 진입 시 1회만 */}
+        {currentUrl && (
           <button
+            ref={heartBtnRef}
             onClick={toggleCurrentLike}
-            aria-label="코디 이미지 좋아요"
-            className="absolute bottom-2.5 right-2.5 flex h-9 w-9 animate-heart-in items-center justify-center rounded-full border border-black/5 bg-white/75 backdrop-blur-sm"
+            aria-label="이미지 좋아요"
+            className={`absolute right-2.5 flex h-9 w-9 animate-heart-in items-center justify-center rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.35)] ${
+              showStrip ? "bottom-[4.375rem]" : "bottom-2.5"
+            }`}
           >
             <Heart
               className={`h-5 w-5 transition-transform active:scale-90 ${isLiked ? "fill-red-500 text-red-500" : "text-foreground"}`}
@@ -166,8 +192,15 @@ const FeedPost = ({ product, sequenceNumber, onOpenSheet }: FeedPostProps) => {
           </button>
         )}
         {showHeartPop && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <Heart className="h-24 w-24 animate-heart-pop fill-white text-white drop-shadow-lg" />
+          <div
+            className={`pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center ${
+              showStrip ? "bottom-[3.75rem]" : "bottom-0"
+            }`}
+          >
+            <Heart
+              className="h-24 w-24 animate-heart-pop fill-red-500 text-red-500 drop-shadow-lg"
+              style={{ "--fly-x": `${flyOffset.x}px`, "--fly-y": `${flyOffset.y}px` } as React.CSSProperties}
+            />
           </div>
         )}
       </div>

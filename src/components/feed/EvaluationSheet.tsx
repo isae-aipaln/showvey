@@ -76,6 +76,22 @@ const EvaluationSheet = ({ product, open, onOpenChange }: EvaluationSheetProps) 
     setPurchaseIntent(userRole === "STAFF_2" ? ex?.Purchase_intent ?? undefined : undefined);
     setOrderCount(userRole === "STORE" ? ex?.Order_count ?? undefined : undefined);
     setDirty(false);
+
+    // 시트를 연 것만으로 평가완료 처리: 기존 평가 문서가 없으면 최소 문서를 생성
+    // (평가하기 어렵거나 할말이 없는 스타일도 '확인함'으로 집계 — 입력하면 같은 문서에 merge됨)
+    if (!ex && currentUser) {
+      const base = {
+        Style_no: normalizeStyleNo(product.styleCode),
+        Evaluator_ID: currentUser,
+        Project_name: product.projectId,
+      };
+      saveEvaluationMerge(currentUser, product.styleCode, base)
+        .then(() => {
+          updateEvaluation(mergeWithLocalEvaluation(evaluationsRef.current, currentUser, product.styleCode, base));
+          markProductEvaluated(product.id);
+        })
+        .catch((err) => console.error("열람 기록 저장 실패:", err));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, product?.styleCode]);
 

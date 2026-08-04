@@ -235,9 +235,9 @@ const ProductDetailShell = ({ routePrefix, summaryTable, detailTable, isNew }: P
   const handleCoordFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    const remainingSlots = 6 - currentCoordImages.length;
+    const remainingSlots = 10 - currentCoordImages.length;
     if (remainingSlots <= 0) {
-      toast.error("코디 이미지는 최대 6개까지만 등록 가능합니다.");
+      toast.error("코디 이미지는 최대 10개까지만 등록 가능합니다.");
       return;
     }
     const allowedFiles = files.slice(0, remainingSlots);

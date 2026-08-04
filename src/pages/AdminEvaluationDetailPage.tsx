@@ -7,7 +7,7 @@ import { useAppContext } from "@/context/AppContext";
 import { db, storage } from "@/firebase";
 import { doc, getDoc, getDocs, collection, query, where, setDoc, updateDoc, writeBatch, orderBy } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { Menu, Lock, Shirt, LogOut, Bell, Plus, Trash2, Save, Upload, Download, X, Home, ChevronUp, ChevronDown } from "lucide-react";
+import { Menu, Lock, Shirt, LogOut, Bell, Plus, Trash2, Save, Upload, Download, X, Home, ChevronUp, ChevronDown, ArrowLeftRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,7 +131,7 @@ const COLUMNS: ColumnDef[] = [
   { key: "thumbnail", label: "썸네일 (1)", type: "image", limit: 1 },
   { key: "productImages", label: "단품이미지 (15)", type: "image", limit: 15 },
   // 코디이미지 컬럼 복원 (2026-07-30 — 모바일 피드에서 코디이미지에만 좋아요를 띄우기 위해 카테고리 분리 재개)
-  { key: "coordiImages", label: "코디이미지 (6)", type: "image", limit: 6 },
+  { key: "coordiImages", label: "코디이미지 (10)", type: "image", limit: 10 },
   { key: "price", label: "판매가" },
   { key: "fabricName", label: "원단명" },
   { key: "composition", label: "혼용률" },
@@ -642,7 +642,7 @@ const AdminEvaluationDetailPage = () => {
           const row = { ...tempRows[rowIndex] };
           if (category === "thumbnail") { row.thumbnail = [url]; row.thumbnailFile = final; }
           else if (category === "product" && row.productImages.length < 15) { row.productImages = [...row.productImages, url]; row.productImageFiles = [...(row.productImageFiles || []), final]; }
-          else if (category === "coordi" && row.coordiImages.length < 6) { row.coordiImages = [...row.coordiImages, url]; row.coordiImageFiles = [...(row.coordiImageFiles || []), final]; }
+          else if (category === "coordi" && row.coordiImages.length < 10) { row.coordiImages = [...row.coordiImages, url]; row.coordiImageFiles = [...(row.coordiImageFiles || []), final]; }
           tempRows[rowIndex] = row;
         }
 
@@ -707,6 +707,33 @@ const AdminEvaluationDetailPage = () => {
     }));
   };
 
+  // 단품 ↔ 코디 간 이미지 이동 (URL만 배열 간 이동 — Storage 파일은 그대로라 재업로드 불필요, 저장 시 반영)
+  const handleMoveImage = (rowId: string, fromType: "productImages" | "coordiImages", index: number) => {
+    const toType = fromType === "productImages" ? "coordiImages" : "productImages";
+    const toLimit = COLUMNS.find(c => c.key === toType)?.limit ?? 15;
+    const row = rows.find(r => r.id === rowId);
+    if (!row) return;
+    const url = ((row as any)[fromType] as string[])[index];
+    if (!url) return;
+    if (!url.startsWith("http")) {
+      toast.error("저장 전 새 이미지는 이동할 수 없습니다. 먼저 저장한 뒤 이동해주세요.");
+      return;
+    }
+    if (((row as any)[toType] as string[]).length >= toLimit) {
+      toast.error(`${toType === "coordiImages" ? "코디이미지" : "단품이미지"}가 이미 최대 ${toLimit}장입니다.`);
+      return;
+    }
+    setRows(prev => prev.map(r =>
+      r.id === rowId
+        ? {
+            ...r,
+            [fromType]: ((r as any)[fromType] as string[]).filter((_, i2) => i2 !== index),
+            [toType]: [...((r as any)[toType] as string[]), url],
+          }
+        : r,
+    ));
+  };
+
   const renderImageCell = (row: ProductRow, type: any, limit: number) => {
     const images = (row as any)[type] as string[];
     const rowIndex = rows.findIndex(r => r.id === row.id);
@@ -728,6 +755,14 @@ const AdminEvaluationDetailPage = () => {
           >
             <img src={url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover pointer-events-none" />
             <button onClick={() => handleDeleteImage(rowIndex, deleteType, i, url)} className="absolute top-0.5 right-0.5 bg-red-500/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+            {/* 단품↔코디 이동 버튼 (호버 시 좌하단) — 클릭 한 번으로 재분류 */}
+            {(type === "productImages" || type === "coordiImages") && (
+              <button
+                onClick={() => handleMoveImage(row.id, type, i)}
+                title={type === "productImages" ? "코디이미지로 이동" : "단품이미지로 이동"}
+                className="absolute bottom-0.5 left-0.5 bg-blue-500/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+              ><ArrowLeftRight size={10} /></button>
+            )}
           </div>
         ))}
         {images.length < limit && (

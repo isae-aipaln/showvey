@@ -91,26 +91,33 @@ export default {
             height: "0",
           },
         },
-        // 코디 슬라이드 진입 시 하트 버튼 등장 모션 (존재감 표시)
+        // 포스트 최초 진입 시 하트 버튼 존재감 모션 (1회만): 1.5배 확대 + 좌우 3회 흔들림
         "heart-in": {
           "0%": { transform: "scale(0.5)", opacity: "0" },
-          "60%": { transform: "scale(1.15)", opacity: "1" },
-          "100%": { transform: "scale(1)", opacity: "1" },
+          "22%": { transform: "scale(1.5)", opacity: "1" },
+          "36%": { transform: "scale(1.45) rotate(-10deg)" },
+          "50%": { transform: "scale(1.45) rotate(10deg)" },
+          "64%": { transform: "scale(1.4) rotate(-10deg)" },
+          "78%": { transform: "scale(1.3) rotate(10deg)" },
+          "90%": { transform: "scale(1.1) rotate(-4deg)" },
+          "100%": { transform: "scale(1) rotate(0deg)", opacity: "1" },
         },
-        // 피드 이미지 더블탭 좋아요 시 중앙에 뜨는 하트 팝 (인스타그램 스타일)
+        // 좋아요 시 중앙 빨간 하트 팝 → 우측 하단 하트 버튼으로 날아가 흡수 (인스타그램 스타일).
+        // --fly-x/--fly-y는 트리거 시점에 JS가 하트 버튼 위치를 재서 넣어줌
         "heart-pop": {
-          "0%": { transform: "scale(0)", opacity: "0" },
-          "15%": { transform: "scale(1.2)", opacity: "1" },
-          "30%": { transform: "scale(0.95)" },
-          "45%, 80%": { transform: "scale(1)", opacity: "1" },
-          "100%": { transform: "scale(1.1)", opacity: "0" },
+          "0%": { transform: "translate(0, 0) scale(0)", opacity: "0" },
+          "14%": { transform: "translate(0, 0) scale(1.15)", opacity: "1" },
+          "24%": { transform: "translate(0, 0) scale(0.95)", opacity: "1" },
+          "34%, 55%": { transform: "translate(0, 0) scale(1)", opacity: "1" },
+          "90%": { transform: "translate(var(--fly-x, 0px), var(--fly-y, 0px)) scale(0.25)", opacity: "1" },
+          "100%": { transform: "translate(var(--fly-x, 0px), var(--fly-y, 0px)) scale(0.2)", opacity: "0" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "heart-in": "heart-in 0.35s ease-out",
-        "heart-pop": "heart-pop 0.9s ease-in-out forwards",
+        "heart-in": "heart-in 0.8s ease-out",
+        "heart-pop": "heart-pop 1s cubic-bezier(0.5, 0, 0.4, 1) forwards",
       },
     },
   },

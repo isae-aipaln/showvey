@@ -25,21 +25,21 @@ const MobileTabBar = ({ activeTab, onTabChange, onExit }: MobileTabBarProps) => 
       </button>
       <button
         onClick={() => onTabChange("done")}
-        aria-label="완료현황"
+        aria-label="결과보기"
         className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 ${
           activeTab === "done" ? "text-foreground" : "text-muted-foreground"
         }`}
       >
         <ClipboardCheck className="h-[22px] w-[22px]" strokeWidth={activeTab === "done" ? 2.2 : 1.6} />
-        <span className={`text-[10px] leading-none ${activeTab === "done" ? "font-medium" : ""}`}>완료</span>
+        <span className={`text-[10px] leading-none ${activeTab === "done" ? "font-medium" : ""}`}>결과보기</span>
       </button>
       <button
         onClick={onExit}
-        aria-label="나가기"
+        aria-label="로그아웃"
         className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-muted-foreground"
       >
         <LogOut className="h-[22px] w-[22px]" strokeWidth={1.6} />
-        <span className="text-[10px] leading-none">나가기</span>
+        <span className="text-[10px] leading-none">로그아웃</span>
       </button>
     </div>
   </nav>
