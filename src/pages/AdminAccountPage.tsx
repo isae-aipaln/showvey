@@ -3,26 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import { db } from "@/firebase";
 import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
-import { Menu, Home, Lock, Shirt, LogOut, Bell, Plus, FileUp, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
-
-interface Account {
-  id: string;
-  code: string;
-  role: string;
-  selected: boolean;
-  isNew?: boolean;
-}
+import AdminShell from "@/components/admin/AdminShell";
+import AdminSection, { Account } from "@/components/admin/AdminSection";
 
 type SectionType = "admin" | "staff1" | "staff2" | "store";
 
 const AdminAccountPage = () => {
-  const { logout, adminRole } = useAppContext();
-  const navigate = useNavigate();
+  const { adminRole } = useAppContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadType, setActiveUploadType] = useState<SectionType | null>(null);
-
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [admins, setAdmins] = useState<Account[]>([]);
   const [staff1s, setStaff1s] = useState<Account[]>([]);
@@ -222,188 +213,49 @@ const AdminAccountPage = () => {
     return deletableAccounts.length > 0 && deletableAccounts.every((d) => d.selected);
   };
 
-  const renderSection = (
+  // AdminSection에 넘길 props 묶음 — 로직은 기존 핸들러를 그대로 호출
+  const sectionProps = (
     title: string,
     data: Account[],
     setData: React.Dispatch<React.SetStateAction<Account[]>>,
     type: SectionType,
-  ) => (
-    <div className="mb-8">
-      <div className="flex items-center justify-between mb-3 px-1">
-        <h3 className="text-base font-bold text-slate-700">{title}</h3>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => deleteSelected(type)}
-            className="rounded bg-slate-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-slate-700 transition-all min-w-[64px] flex items-center justify-center"
-          >
-            삭제
-          </button>
-          <button
-            onClick={() => {
-              setActiveUploadType(type);
-              fileInputRef.current?.click();
-            }}
-            className="rounded bg-slate-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-slate-700 transition-all flex items-center gap-1 justify-center"
-          >
-            <FileUp size={14} /> 일괄등록
-          </button>
-          <button
-            onClick={handleAccountTemplateDownload}
-            className="rounded bg-slate-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-slate-700 transition-all flex items-center gap-1 justify-center"
-          >
-            <Download size={14} /> 양식 다운로드
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="max-h-60 overflow-y-auto">
-          <table className="w-full text-sm border-collapse table-fixed">
-            <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
-              <tr>
-                <th className="w-12 px-6 py-4 text-left align-middle">
-                  <input
-                    type="checkbox"
-                    checked={isAllSelected(data)}
-                    onChange={(e) => toggleAll(type, e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 accent-slate-900 align-middle"
-                  />
-                </th>
-                <th className="w-[45%] px-6 py-4 text-left font-bold text-slate-700 uppercase tracking-tight align-middle">
-                  ID
-                </th>
-                <th className="w-40 px-6 py-4 text-left font-bold text-slate-700 uppercase tracking-tight align-middle">
-                  CODE
-                </th>
-                <th className="w-40 px-6 py-4 text-left font-bold text-slate-700 uppercase tracking-tight align-middle">
-                  권한
-                </th>
-                <th className="w-24 px-6 py-4 text-right align-middle"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {data.map((acc, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-3.5 align-middle">
-                    {acc.id !== "admin" && (
-                      <input
-                        type="checkbox"
-                        checked={acc.selected}
-                        onChange={() => toggleItem(data, setData, idx)}
-                        className="h-4 w-4 rounded border-slate-300 accent-slate-900 align-middle"
-                      />
-                    )}
-                  </td>
-                  <td className="px-6 py-3.5 align-middle">
-                    <input
-                      value={acc.id}
-                      onChange={(e) => updateId(data, setData, idx, e.target.value)}
-                      placeholder="ID 입력"
-                      className="bg-transparent text-slate-700 underline underline-offset-4 decoration-slate-200 focus:outline-none focus:text-blue-600 w-full font-medium"
-                    />
-                  </td>
-                  <td className="px-6 py-3.5 align-middle">
-                    <input
-                      value={acc.code}
-                      onChange={(e) => updateCode(data, setData, idx, e.target.value)}
-                      placeholder="CODE 입력"
-                      className="bg-transparent text-slate-600 focus:outline-none w-full"
-                    />
-                  </td>
-                  <td className="px-6 py-3.5 text-slate-500 font-medium align-middle">{acc.role}</td>
-                  <td className="px-6 py-3.5 text-center">
-                    {acc.isNew && (
-                      <button
-                        onClick={() => handleRegister(type, idx)}
-                        className="text-blue-600 font-bold hover:underline"
-                      >
-                        등록
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <button
-          onClick={() => addNewRow(type)}
-          className="flex w-full items-center justify-center border-t border-dashed border-slate-200 py-4 text-slate-400 hover:bg-slate-50 transition-colors"
-        >
-          <Plus size={20} />
-        </button>
-      </div>
-    </div>
-  );
-
-  const handleLogout = () => {
-    logout();
-    toast.success("로그아웃 되었습니다.");
-    navigate("/");
-  };
+  ) => ({
+    title,
+    data,
+    allSelected: isAllSelected(data),
+    onToggleAll: (checked: boolean) => toggleAll(type, checked),
+    onToggleItem: (idx: number) => toggleItem(data, setData, idx),
+    onChangeId: (idx: number, value: string) => updateId(data, setData, idx, value),
+    onChangeCode: (idx: number, value: string) => updateCode(data, setData, idx, value),
+    onRegister: (idx: number) => handleRegister(type, idx),
+    onDeleteSelected: () => deleteSelected(type),
+    onBulkUpload: () => {
+      setActiveUploadType(type);
+      fileInputRef.current?.click();
+    },
+    onAddRow: () => addNewRow(type),
+  });
 
   return (
-    <div className="flex h-screen w-full bg-slate-100 font-sans antialiased text-slate-900 transition-all duration-300">
+    <AdminShell
+      title="계정관리"
+      headerRight={
+        // 양식은 섹션과 무관하게 동일하므로 헤더에 1개만 (기존 섹션별 4개 중복 제거)
+        <button
+          onClick={handleAccountTemplateDownload}
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium shadow-sm transition-colors hover:bg-muted"
+        >
+          <Download size={14} strokeWidth={1.5} /> 양식 다운로드
+        </button>
+      }
+    >
       <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkUpload} />
 
-      <aside
-        className={`flex flex-col justify-between bg-slate-900 text-white transition-all duration-300 ${isSidebarOpen ? "w-56" : "w-16"}`}
-      >
-        <div>
-          <div className="flex h-14 items-center justify-center border-b border-slate-700">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="rounded-md p-2 hover:bg-slate-800 transition-colors"
-            >
-              <Menu size={22} />
-            </button>
-          </div>
-          <nav className="mt-4 flex flex-col gap-1 px-2">
-            <button
-              onClick={() => navigate("/admin/accounts")}
-              className="flex items-center gap-3 rounded-lg bg-slate-800 px-3 py-2.5 text-sm font-medium transition-colors"
-            >
-              <Lock size={18} className="shrink-0" />
-              {isSidebarOpen && <span>계정관리</span>}
-            </button>
-            <button
-              onClick={() => navigate("/admin/evaluations")}
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-            >
-              <Shirt size={18} className="shrink-0" />
-              {isSidebarOpen && <span>품평관리</span>}
-            </button>
-          </nav>
-        </div>
-        <div className="mb-4 flex flex-col gap-1 px-2 border-t border-slate-700 pt-4">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
-          >
-            <LogOut size={18} className="shrink-0" />
-            {isSidebarOpen && <span>로그아웃</span>}
-          </button>
-        </div>
-      </aside>
-
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-8 shadow-sm z-10">
-          <h2 className="text-lg font-bold text-slate-800 tracking-tight">계정관리</h2>
-          <button className="relative rounded-full p-2 hover:bg-slate-100 transition-colors">
-            <Bell size={20} className="text-slate-600" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 border-2 border-white" />
-          </button>
-        </header>
-
-        <main className="flex-1 overflow-y-auto p-10 bg-slate-50/50">
-          {adminRole === "Master" && renderSection("관리자", admins, setAdmins, "admin")}
-          {renderSection("임직원1", staff1s, setStaff1s, "staff1")}
-          {renderSection("임직원2", staff2s, setStaff2s, "staff2")}
-          {renderSection("매장", stores, setStores, "store")}
-        </main>
-      </div>
-    </div>
+      {adminRole === "Master" && <AdminSection {...sectionProps("관리자", admins, setAdmins, "admin")} />}
+      <AdminSection {...sectionProps("임직원1", staff1s, setStaff1s, "staff1")} />
+      <AdminSection {...sectionProps("임직원2", staff2s, setStaff2s, "staff2")} />
+      <AdminSection {...sectionProps("매장", stores, setStores, "store")} />
+    </AdminShell>
   );
 };
 

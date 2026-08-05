@@ -94,7 +94,7 @@
     display: none;
   }
 
-  /* ⭐ 상단 독립 슬라이드 바 전용 스크롤바 표시 */
+  /* ⭐ 상단 독립 슬라이드 바 전용 스크롤바 표시 (전역 숨김 규칙의 예외) */
   .custom-scrollbar::-webkit-scrollbar {
     display: block;
     height: 6px;
@@ -113,6 +113,23 @@
   .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--muted-foreground) / 0.5) hsl(var(--muted));
+  }
+
+  /* ⭐ 관리자 테이블: 세로 스크롤바만 표시 (가로는 상단 미러 바가 담당하므로 숨김) */
+  .scrollbar-vertical::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+    height: 0;
+  }
+  .scrollbar-vertical::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-vertical::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.4);
+    border-radius: 5px;
+  }
+  .scrollbar-vertical::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.6);
   }
 
   /* ⭐ PC에서 '모바일 화면 보기' 전환 시(html.force-mobile): 앱을 스마트폰 폭으로 중앙 표시 */

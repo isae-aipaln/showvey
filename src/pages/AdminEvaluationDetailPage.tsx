@@ -7,7 +7,17 @@ import { useAppContext } from "@/context/AppContext";
 import { db, storage } from "@/firebase";
 import { doc, getDoc, getDocs, collection, query, where, setDoc, updateDoc, writeBatch, orderBy } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { Menu, Lock, Shirt, LogOut, Bell, Plus, Trash2, Save, Upload, Download, X, Home, ChevronUp, ChevronDown, ArrowLeftRight } from "lucide-react";
+import { Plus, Trash2, Save, Upload, Download, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, ChevronLeft, ArrowDownUp } from "lucide-react";
+import AdminShell from "@/components/admin/AdminShell";
+import ProductImageCell from "@/components/admin/ProductImageCell";
+import { CARD, CHECKBOX } from "@/components/admin/adminTable";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +76,8 @@ interface ColumnDef {
   label: string;
   type?: "image" | "text";
   limit?: number;
+  /** 컬럼 폭(px) — colgroup과 테이블 최소폭 계산의 단일 소스 */
+  width: number;
 }
 
 interface ProductRow {
@@ -127,33 +139,45 @@ const emptyRow = (): ProductRow => ({
 });
 
 const COLUMNS: ColumnDef[] = [
-  { key: "styleNo", label: "품번" },
-  { key: "thumbnail", label: "썸네일 (1)", type: "image", limit: 1 },
-  { key: "productImages", label: "단품이미지 (15)", type: "image", limit: 15 },
+  { key: "styleNo", label: "품번", width: 150 },
+  { key: "displayNo", label: "순번", width: 90 },
+  { key: "thumbnail", label: "썸네일 (1)", type: "image", limit: 1, width: 100 },
+  { key: "productImages", label: "단품이미지 (15)", type: "image", limit: 15, width: 268 },
   // 코디이미지 컬럼 복원 (2026-07-30 — 모바일 피드에서 코디이미지에만 좋아요를 띄우기 위해 카테고리 분리 재개)
-  { key: "coordiImages", label: "코디이미지 (10)", type: "image", limit: 10 },
-  { key: "price", label: "판매가" },
-  { key: "fabricName", label: "원단명" },
-  { key: "composition", label: "혼용률" },
-  { key: "fabricWidth", label: "원단폭" },
-  { key: "unitPrice", label: "단가" },
-  { key: "mu", label: "M/U" },
-  { key: "consumption", label: "요척" },
-  { key: "rawMaterial", label: "원자재" },
-  { key: "subsidiary", label: "부자재" },
-  { key: "specialSubsidiary", label: "특수부자재" },
-  { key: "laborCost", label: "공임비" },
-  { key: "cogs", label: "제조원가" },
-  { key: "addLaborInfo", label: "추가공임정보" },
-  { key: "otherMaterialInfo", label: "기타원자재정보" },
-  { key: "miniDeliStock", label: "MINI/DELI_재고/선발주" },
+  { key: "coordiImages", label: "코디이미지 (10)", type: "image", limit: 10, width: 268 },
+  { key: "price", label: "판매가", width: 110 },
+  { key: "fabricName", label: "원단명", width: 160 },
+  { key: "composition", label: "혼용률", width: 200 },
+  { key: "fabricWidth", label: "원단폭", width: 100 },
+  { key: "unitPrice", label: "단가", width: 100 },
+  { key: "mu", label: "M/U", width: 90 },
+  { key: "consumption", label: "요척", width: 90 },
+  { key: "rawMaterial", label: "원자재", width: 130 },
+  { key: "subsidiary", label: "부자재", width: 130 },
+  { key: "specialSubsidiary", label: "특수부자재", width: 130 },
+  { key: "laborCost", label: "공임비", width: 110 },
+  { key: "cogs", label: "제조원가", width: 110 },
+  { key: "addLaborInfo", label: "추가공임정보", width: 160 },
+  { key: "otherMaterialInfo", label: "기타원자재정보", width: 160 },
+  { key: "miniDeliStock", label: "MINI/DELI_재고/선발주", width: 190 },
 ];
+
+/** 좌측 고정 열(체크박스+순서이동) 폭 — colgroup 폭과 품번 열 sticky offset의 단일 소스 */
+const SELECT_COL_W = 84;
+
+/** "3-1", "46-2" 같은 복합 순번을 숫자 기준으로 비교 (빈 값은 맨 뒤) */
+const displayNoSortKey = (value: string): [number, number] => {
+  const m = String(value ?? "").trim().match(/^(\d+)(?:\s*-\s*(\d+))?/);
+  if (!m) return [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER];
+  return [parseInt(m[1], 10), m[2] ? parseInt(m[2], 10) : 0];
+};
+/** 테이블 최소 폭 — 컬럼 정의에서 자동 계산 (기존 3500px 하드코딩 2곳을 대체) */
+const TABLE_MIN_WIDTH = SELECT_COL_W + COLUMNS.reduce((sum, c) => sum + c.width, 0);
 
 const AdminEvaluationDetailPage = () => {
   const { id } = useParams();
-  const { logout, refreshData } = useAppContext();
+  const { refreshData } = useAppContext();
   const navigate = useNavigate();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [evaluationName, setEvaluationName] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -734,60 +758,122 @@ const AdminEvaluationDetailPage = () => {
     ));
   };
 
+  // ── 행 순서 변경 ─────────────────────────────────────────────
+  // 행 드래그는 제외 (dragover마다 전체 행이 리렌더돼 165행에서 심하게 느려짐).
+  // 대량 재배치는 순번 정렬, 소소한 조정은 이동 버튼으로 처리한다.
+
+  /** from 위치의 행을 to 위치로 이동 (교환이 아니라 삽입) */
+  const moveRow = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    setRows(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(Math.min(to, next.length), 0, moved);
+      return next;
+    });
+  };
+
+  /** 순번(Display_no) 값 기준으로 전체 재정렬 — 엑셀에서 순번을 채워 올린 뒤 한 번에 반영 */
+  const sortByDisplayNo = () => {
+    const filled = rows.filter(r => String(r.displayNo ?? "").trim() !== "").length;
+    if (filled === 0) {
+      toast.error("순번이 입력된 행이 없습니다.");
+      return;
+    }
+    setRows(prev =>
+      [...prev].sort((a, b) => {
+        const ka = displayNoSortKey(a.displayNo);
+        const kb = displayNoSortKey(b.displayNo);
+        return ka[0] - kb[0] || ka[1] - kb[1];
+      }),
+    );
+    toast.success(`순번대로 정렬했습니다. (${filled}개) 저장을 눌러야 반영됩니다.`);
+  };
+
+  // 단품·코디 이미지를 썸네일로 지정 (URL만 복사 — 원본은 그대로 두어 피드의 [단품→코디] 순서 유지)
+  const handleSetThumbnail = (rowId: string, fromType: "productImages" | "coordiImages", index: number) => {
+    const row = rows.find(r => r.id === rowId);
+    if (!row) return;
+    const url = ((row as any)[fromType] as string[])[index];
+    if (!url) return;
+    if (!url.startsWith("http")) {
+      toast.error("저장 전 새 이미지는 썸네일로 지정할 수 없습니다. 먼저 저장한 뒤 지정해주세요.");
+      return;
+    }
+    setRows(prev => prev.map(r => (r.id === rowId ? { ...r, thumbnail: [url], thumbnailFile: null } : r)));
+    toast.success("썸네일로 지정했습니다. 저장을 눌러야 반영됩니다.");
+  };
+
   const renderImageCell = (row: ProductRow, type: any, limit: number) => {
     const images = (row as any)[type] as string[];
     const rowIndex = rows.findIndex(r => r.id === row.id);
     const deleteType = type === "productImages" ? "product" : type === "coordiImages" ? "coordi" : "thumbnail";
-    const sortable = type !== "thumbnail";
+    const isThisCellDragging = dragInfo && dragInfo.rowId === row.id && dragInfo.type === type;
 
     return (
-      <div className="flex items-center gap-1.5 min-w-[80px]">
-        {images.map((url, i) => (
-          <div
-            key={url + i}
-            draggable={sortable}
-            onDragStart={sortable ? () => setDragInfo({ rowId: row.id, type, index: i }) : undefined}
-            onDragEnd={sortable ? () => setDragInfo(null) : undefined}
-            onDragOver={sortable ? (e) => { e.preventDefault(); } : undefined}
-            onDrop={sortable ? (e) => { e.preventDefault(); handleReorderImage(row.id, type, i); } : undefined}
-            className={`relative h-10 w-10 rounded border border-slate-200 overflow-hidden shrink-0 group${sortable ? " cursor-grab active:cursor-grabbing" : ""}${dragInfo && dragInfo.rowId === row.id && dragInfo.type === type && dragInfo.index === i ? " opacity-40 ring-2 ring-blue-400" : ""}`}
-            title={sortable ? "드래그해서 순서 변경" : undefined}
-          >
-            <img src={url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover pointer-events-none" />
-            <button onClick={() => handleDeleteImage(rowIndex, deleteType, i, url)} className="absolute top-0.5 right-0.5 bg-red-500/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
-            {/* 단품↔코디 이동 버튼 (호버 시 좌하단) — 클릭 한 번으로 재분류 */}
-            {(type === "productImages" || type === "coordiImages") && (
-              <button
-                onClick={() => handleMoveImage(row.id, type, i)}
-                title={type === "productImages" ? "코디이미지로 이동" : "단품이미지로 이동"}
-                className="absolute bottom-0.5 left-0.5 bg-blue-500/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-              ><ArrowLeftRight size={10} /></button>
-            )}
-          </div>
-        ))}
-        {images.length < limit && (
-          <button
-            onClick={() => { setActiveUpload({ rowId: row.id, type, limit }); fileInputRef.current?.click(); }}
-            onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add("bg-blue-50"); }}
-            onDragLeave={e => { e.preventDefault(); e.currentTarget.classList.remove("bg-blue-50"); }}
-            onDrop={e => {
-              e.preventDefault(); e.currentTarget.classList.remove("bg-blue-50");
-              // 내부 이미지 드래그를 + 버튼에 놓으면 맨 뒤로 이동, 외부 파일 드롭이면 기존 업로드 동작
-              if (dragInfo && dragInfo.rowId === row.id && dragInfo.type === type) {
-                handleReorderImage(row.id, type, images.length - 1);
-              } else {
-                handleDropFiles(Array.from(e.dataTransfer.files), row.id, type, limit);
-              }
-            }}
-            className="h-10 w-10 rounded border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 shrink-0 hover:border-slate-400 transition-colors"
-          ><Plus size={14} /></button>
-        )}
-      </div>
+      <ProductImageCell
+        images={images}
+        type={type}
+        limit={limit}
+        draggingIndex={isThisCellDragging ? dragInfo!.index : null}
+        isInternalDrag={!!isThisCellDragging}
+        onDragStart={(i) => setDragInfo({ rowId: row.id, type, index: i })}
+        onDragEnd={() => setDragInfo(null)}
+        onReorder={(toIndex) => handleReorderImage(row.id, type, toIndex)}
+        onDelete={(i, url) => handleDeleteImage(rowIndex, deleteType, i, url)}
+        onMove={(i) => handleMoveImage(row.id, type, i)}
+        onSetThumbnail={(i) => handleSetThumbnail(row.id, type, i)}
+        thumbnailUrl={row.thumbnail[0]}
+        onAddClick={() => { setActiveUpload({ rowId: row.id, type, limit }); fileInputRef.current?.click(); }}
+        onDropFiles={(files) => handleDropFiles(files, row.id, type, limit)}
+      />
     );
   };
 
+  const selectedCount = rows.filter(r => r.selected).length;
+
   return (
-    <div className="flex h-screen w-full bg-slate-100 font-sans antialiased text-slate-900 transition-all duration-300">
+    <AdminShell
+      title="품평 상세"
+      fill
+      headerLeft={
+        // 뒤로가기는 좌측 상단이 관례 (제목 앞)
+        <button
+          onClick={() => navigate("/admin/evaluations")}
+          aria-label="목록으로"
+          title="목록으로"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ChevronLeft size={20} strokeWidth={1.5} />
+        </button>
+      }
+      headerRight={
+        <>
+          {/* 업로드·양식 다운로드는 페이지 전역 액션이므로 툴바에 배치 */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-2">
+                <Upload size={14} strokeWidth={1.5} /> 가져오기 / 내보내기
+                <ChevronDown size={14} strokeWidth={1.5} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onSelect={() => csvInputRef.current?.click()}>
+                <Upload size={14} strokeWidth={1.5} className="mr-2" /> 상품정보 업로드
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => zipInputRef.current?.click()}>
+                <Upload size={14} strokeWidth={1.5} className="mr-2" /> 이미지 업로드 (ZIP)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={handleTemplateDownload}>
+                <Download size={14} strokeWidth={1.5} className="mr-2" /> 양식 다운로드
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      }
+    >
+      {/* 파일 input 3종은 드롭다운 밖(페이지 루트)에 유지 — 언마운트되면 ref.click()이 동작하지 않음 */}
       <input
         ref={fileInputRef}
         type="file"
@@ -819,79 +905,150 @@ const AdminEvaluationDetailPage = () => {
       <input ref={csvInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleCsvUpload} />
       <input ref={zipInputRef} type="file" accept=".zip" className="hidden" onChange={handleZipImageUpload} />
 
-      <aside className={`flex flex-col justify-between bg-slate-900 text-white transition-all duration-300 ${isSidebarOpen ? "w-56" : "w-16"}`}>
-        <div>
-          <div className="flex h-14 items-center justify-center border-b border-slate-700">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="rounded-md p-2 hover:bg-slate-800 transition-colors"><Menu size={22} /></button>
+      {/* 설정 카드 */}
+      <div className={`${CARD} mb-4 shrink-0 p-4`}>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-xs text-muted-foreground">품평 이름</span>
+            <Input value={evaluationName} onChange={e => setEvaluationName(e.target.value)} placeholder="품평회 명칭 입력" className="h-9 w-52 text-sm" />
           </div>
-          <nav className="mt-4 flex flex-col gap-1 px-2">
-            <button onClick={() => navigate("/admin/accounts")} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"><Lock size={18} className="shrink-0" />{isSidebarOpen && <span>계정관리</span>}</button>
-            <button onClick={() => navigate("/admin/evaluations")} className="flex items-center gap-3 rounded-lg bg-slate-800 px-3.5 py-3 text-sm font-medium text-white transition-colors"><Shirt size={18} className="shrink-0" />{isSidebarOpen && <span>품평관리</span>}</button>
-          </nav>
-        </div>
-        <div className="mb-4 flex flex-col gap-1 px-2 border-t border-slate-700 pt-4">
-          <button onClick={() => { logout(); navigate("/"); }} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"><LogOut size={18} className="shrink-0" />{isSidebarOpen && <span>로그아웃</span>}</button>
-        </div>
-      </aside>
-
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-8 shadow-sm z-10">
-          <h2 className="text-lg font-bold text-slate-800 tracking-tight">품평 상세</h2>
-          <button className="relative rounded-full p-2 hover:bg-slate-100 transition-colors"><Bell size={20} className="text-slate-600" /><span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 border-2 border-white" /></button>
-        </header>
-
-        <main className="flex-1 overflow-y-auto p-8 bg-slate-50/50">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm mb-6">
-            <div className="flex flex-wrap items-center gap-6">
-              <div className="flex items-center gap-3"><span className="text-xs font-bold bg-slate-900 text-white px-3 py-2 rounded-md shrink-0">품평 이름</span><Input value={evaluationName} onChange={e => setEvaluationName(e.target.value)} placeholder="품평회 명칭 입력" className="w-52 h-10 text-sm" /></div>
-              <div className="flex items-center gap-3"><span className="text-xs font-bold bg-slate-900 text-white px-3 py-2 rounded-md shrink-0">기간</span><div className="flex items-center gap-2"><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40 h-10 text-sm" /><span className="text-slate-400">~</span><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40 h-10 text-sm" /></div></div>
-              <div className="flex items-center gap-6"><div className="flex items-center gap-3"><span className="text-xs font-bold bg-slate-900 text-white px-3 py-2 rounded-md shrink-0">스타일 랜덤배열</span><Switch checked={isRandomized} onCheckedChange={setIsRandomized} /></div></div>
-              <div className="ml-auto flex items-center gap-3">
-                <Button onClick={() => setRows(rows.filter(r => !r.selected))} variant="outline" size="sm" className="h-10 text-red-600 border-slate-200 hover:bg-red-50"><Trash2 size={16} /> 삭제</Button>
-                <Button onClick={handleSave} size="sm" className="h-10 px-6 bg-slate-900 text-white hover:bg-slate-800"><Save size={16} /> 저장</Button>
-                <button onClick={() => csvInputRef.current?.click()} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 transition-all flex items-center gap-2 shadow-sm h-10"><Upload size={14} /> 상품정보 업로드</button>
-                <button onClick={() => zipInputRef.current?.click()} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 transition-all flex items-center gap-2 shadow-sm h-10"><Upload size={14} /> 이미지 업로드</button>
-                <button onClick={handleTemplateDownload} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 transition-all flex items-center gap-2 shadow-sm h-10"><Download size={14} /> 양식 다운로드</button>
-              </div>
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-xs text-muted-foreground">기간</span>
+            <div className="flex items-center gap-2">
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 w-40 text-sm tabular-nums" />
+              <span className="text-muted-foreground">~</span>
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9 w-40 text-sm tabular-nums" />
             </div>
           </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col relative">
-            <div className="bg-slate-50 border-b border-slate-200 px-4 py-1"><div ref={topScrollRef} className="custom-scrollbar overflow-x-auto overflow-y-hidden h-3 max-w-[50%]"><div style={{ width: "3500px", height: "1px" }} /></div></div>
-            <div ref={tableContainerRef} className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
-              <table className="w-full text-sm text-slate-700 border-collapse table-auto min-w-[3500px]">
-                <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-20">
-                  <tr>
-                    <th className="sticky left-0 z-30 bg-slate-50 px-4 py-4 text-left w-12 border-r border-slate-100"><input type="checkbox" checked={rows.length > 0 && rows.every(r => r.selected)} onChange={e => setRows(rows.map(r => ({ ...r, selected: e.target.checked })))} className="h-4 w-4 rounded border-slate-300 accent-slate-900" /></th>
-                    {COLUMNS.map(col => (<th key={col.key} className="px-6 py-4 text-left text-xs font-bold text-slate-600 whitespace-nowrap">{col.label}</th>))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {rows.map((row, rowIdx) => (
-                    <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="sticky left-0 z-10 bg-white px-2 py-3 align-middle border-r border-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                        <div className="flex items-center gap-1">
-                          <input type="checkbox" checked={row.selected} onChange={() => setRows(rows.map(r => (r.id === row.id ? { ...r, selected: !r.selected } : r)))} className="h-4 w-4 rounded border-slate-300 accent-slate-900" />
-                          <div className="flex flex-col">
-                            <button disabled={rowIdx === 0} onClick={() => { const newRows = [...rows]; [newRows[rowIdx - 1], newRows[rowIdx]] = [newRows[rowIdx], newRows[rowIdx - 1]]; setRows(newRows); }} className="p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20"><ChevronUp size={12} /></button>
-                            <button disabled={rowIdx === rows.length - 1} onClick={() => { const newRows = [...rows]; [newRows[rowIdx], newRows[rowIdx + 1]] = [newRows[rowIdx + 1], newRows[rowIdx]]; setRows(newRows); }} className="p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20"><ChevronDown size={12} /></button>
-                          </div>
-                        </div>
-                      </td>
-                      {COLUMNS.map(col => {
-                        if (col.type === "image") return (<td key={col.key} className="px-6 py-3 align-middle">{renderImageCell(row, col.key, col.limit || 1)}</td>);
-                        return (<td key={col.key} className="px-6 py-3 align-middle min-w-[150px]"><textarea value={(row as any)[col.key]} onChange={e => setRows(rows.map(r => (r.id === row.id ? { ...r, [col.key]: e.target.value } : r)))} className="w-full bg-transparent border-none focus:ring-0 text-xs p-0 resize-none overflow-hidden min-h-[20px]" rows={1} placeholder="-" /></td>);
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="border-t border-slate-100 bg-slate-50/30"><button onClick={() => setRows([...rows, emptyRow()])} className="w-full py-4 flex justify-center text-slate-400 hover:bg-slate-50 transition-colors"><Plus size={24} /></button></div>
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-xs text-muted-foreground">스타일 랜덤배열</span>
+            <Switch checked={isRandomized} onCheckedChange={setIsRandomized} />
           </div>
-        </main>
+          {/* 행 액션은 설정 카드 우측 끝 — 이 카드는 스크롤되지 않으므로 항상 보임 */}
+          <div className="ml-auto flex items-center gap-2">
+            {selectedCount > 0 && (
+              <Button
+                onClick={() => setRows(rows.filter(r => !r.selected))}
+                variant="ghost"
+                size="sm"
+                className="h-9 gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 size={14} strokeWidth={1.5} /> <span className="tabular-nums">{selectedCount}</span>개 삭제
+              </Button>
+            )}
+            <Button onClick={handleSave} size="sm" className="h-9 gap-1.5 px-6">
+              <Save size={14} strokeWidth={1.5} /> 저장
+            </Button>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* 테이블 카드 — 남은 높이를 채우고 내부에서만 스크롤 (thead sticky·하단 액션바가 항상 보이도록) */}
+      <div className={`${CARD} flex min-h-0 flex-1 flex-col overflow-hidden`}>
+        <div className="shrink-0 border-b border-border bg-muted/60 px-4 py-1">
+          <div ref={topScrollRef} className="custom-scrollbar h-3 overflow-x-auto overflow-y-hidden">
+            <div style={{ width: TABLE_MIN_WIDTH, height: "1px" }} />
+          </div>
+        </div>
+        <div ref={tableContainerRef} className="scrollbar-vertical min-h-0 flex-1 overflow-auto">
+          <table className="w-full table-fixed border-collapse text-sm" style={{ minWidth: TABLE_MIN_WIDTH }}>
+            <colgroup>
+              <col style={{ width: SELECT_COL_W }} />
+              {COLUMNS.map(col => (
+                <col key={col.key} style={{ width: col.width }} />
+              ))}
+            </colgroup>
+            <thead className="sticky top-0 z-20 border-b border-border bg-[hsl(var(--muted))]">
+              <tr>
+                <th className="sticky left-0 z-30 border-r border-border bg-[hsl(var(--muted))] px-4 py-3.5 text-left">
+                  <input type="checkbox" checked={rows.length > 0 && rows.every(r => r.selected)} onChange={e => setRows(rows.map(r => ({ ...r, selected: e.target.checked })))} className={CHECKBOX} />
+                </th>
+                {COLUMNS.map((col, colIdx) => (
+                  <th
+                    key={col.key}
+                    style={colIdx === 0 ? { left: SELECT_COL_W } : undefined}
+                    className={`px-4 py-3.5 text-left text-xs font-medium text-muted-foreground whitespace-nowrap${
+                      colIdx === 0 ? " sticky z-30 border-r border-border bg-[hsl(var(--muted))] shadow-[2px_0_5px_rgba(0,0,0,0.04)]" : ""
+                    }`}
+                  >
+                    {col.key === "displayNo" ? (
+                      <span className="flex items-center gap-1">
+                        {col.label}
+                        <button
+                          onClick={sortByDisplayNo}
+                          title="순번대로 전체 정렬"
+                          aria-label="순번대로 정렬"
+                          className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground"
+                        >
+                          <ArrowDownUp size={12} strokeWidth={1.8} />
+                        </button>
+                      </span>
+                    ) : (
+                      col.label
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIdx) => (
+                <tr key={row.id} className="group border-b border-border/60 transition-colors hover:bg-muted/50">
+                  {/* 고정 열은 배경 불투명 필수 — 알파면 스크롤 시 아래 셀이 비침.
+                      헤더 th와 동일한 px-4를 써야 체크박스 세로줄이 맞음 */}
+                  <td className="sticky left-0 z-10 border-r border-border bg-card px-4 py-3 align-middle group-hover:bg-muted">
+                    <div className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={row.selected} onChange={() => setRows(rows.map(r => (r.id === row.id ? { ...r, selected: !r.selected } : r)))} className={CHECKBOX} />
+                      {/* 좌: 맨 위/맨 아래로, 우: 한 칸씩 */}
+                      <div className="grid grid-cols-2 gap-x-0.5">
+                        <button disabled={rowIdx === 0} onClick={() => moveRow(rowIdx, 0)} title="맨 위로" aria-label="맨 위로 이동" className="text-muted-foreground hover:text-foreground disabled:opacity-20"><ChevronsUp size={12} strokeWidth={1.8} /></button>
+                        <button disabled={rowIdx === 0} onClick={() => moveRow(rowIdx, rowIdx - 1)} title="위로" aria-label="위로 이동" className="text-muted-foreground hover:text-foreground disabled:opacity-20"><ChevronUp size={12} strokeWidth={1.8} /></button>
+                        <button disabled={rowIdx === rows.length - 1} onClick={() => moveRow(rowIdx, rows.length - 1)} title="맨 아래로" aria-label="맨 아래로 이동" className="text-muted-foreground hover:text-foreground disabled:opacity-20"><ChevronsDown size={12} strokeWidth={1.8} /></button>
+                        <button disabled={rowIdx === rows.length - 1} onClick={() => moveRow(rowIdx, rowIdx + 1)} title="아래로" aria-label="아래로 이동" className="text-muted-foreground hover:text-foreground disabled:opacity-20"><ChevronDown size={12} strokeWidth={1.8} /></button>
+                      </div>
+                    </div>
+                  </td>
+                  {COLUMNS.map((col, colIdx) => {
+                    if (col.type === "image") return (<td key={col.key} className="px-4 py-3 align-middle">{renderImageCell(row, col.key, col.limit || 1)}</td>);
+                    return (
+                      <td
+                        key={col.key}
+                        style={colIdx === 0 ? { left: SELECT_COL_W } : undefined}
+                        className={`px-4 py-3 align-middle${
+                          colIdx === 0 ? " sticky z-10 border-r border-border bg-card shadow-[2px_0_5px_rgba(0,0,0,0.04)] group-hover:bg-muted" : ""
+                        }`}
+                      >
+                        {/* -mx-2로 셀 패딩을 상쇄해 헤더 라벨과 글자 시작점을 맞춤 */}
+                        <textarea
+                          value={(row as any)[col.key]}
+                          onChange={e => setRows(rows.map(r => (r.id === row.id ? { ...r, [col.key]: e.target.value } : r)))}
+                          title={(row as any)[col.key] || undefined}
+                          className={`-mx-2 min-h-[24px] w-[calc(100%+1rem)] resize-none overflow-hidden rounded-md bg-transparent px-2 py-1 transition-colors placeholder:text-muted-foreground/40 hover:bg-muted/60 focus:bg-background focus:outline-none focus:ring-1 focus:ring-ring ${
+                            colIdx === 0 ? "text-sm font-medium" : "text-xs"
+                          }`}
+                          rows={1}
+                          placeholder="-"
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {/* 행 추가 */}
+        <button onClick={() => setRows([...rows, emptyRow()])} aria-label="행 추가" className="flex w-full shrink-0 justify-center border-t border-border/60 py-3 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+          <Plus size={20} strokeWidth={1.5} />
+        </button>
+        {/* 하단 정보 바 */}
+        <div className="flex shrink-0 items-center border-t border-border bg-muted/40 px-4 py-2.5">
+          <p className="text-xs text-muted-foreground">
+            전체 <span className="tabular-nums text-foreground">{rows.length}</span>개
+            {selectedCount > 0 && <> · <span className="tabular-nums text-foreground">{selectedCount}</span>개 선택</>}
+          </p>
+        </div>
+      </div>
+    </AdminShell>
   );
 };
 

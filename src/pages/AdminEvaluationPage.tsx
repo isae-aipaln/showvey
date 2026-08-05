@@ -6,21 +6,10 @@ import { useAppContext } from "@/context/AppContext";
 import { db, storage } from "@/firebase";
 import { collection, getDocs, query, orderBy, deleteDoc, doc, where, writeBatch } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
-import {
-  Menu,
-  Lock,
-  Shirt,
-  LogOut,
-  Bell,
-  Plus,
-  Trash2,
-  FileSpreadsheet,
-  ExternalLink,
-  ChevronLeft,
-  ChevronRight,
-  Home,
-} from "lucide-react";
+import { Plus, Trash2, FileSpreadsheet, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import AdminShell from "@/components/admin/AdminShell";
+import { CARD, TH, TD, ROW, CHECKBOX } from "@/components/admin/adminTable";
 
 interface EvaluationItem {
   id: string;
@@ -34,9 +23,7 @@ interface EvaluationItem {
 }
 
 const AdminEvaluationPage = () => {
-  const { logout } = useAppContext();
   const navigate = useNavigate();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [evaluations, setEvaluations] = useState<EvaluationItem[]>([]);
 
@@ -302,188 +289,153 @@ const AdminEvaluationPage = () => {
     }
   };
 
+  const selectedCount = evaluations.filter((e) => e.selected).length;
+
   return (
-    <div className="flex h-screen w-full bg-slate-100 font-sans antialiased text-slate-900 transition-all duration-300">
-      <aside
-        className={`flex flex-col justify-between bg-slate-900 text-white transition-all duration-300 ${isSidebarOpen ? "w-56" : "w-16"}`}
-      >
-        <div>
-          <div className="flex h-14 items-center justify-center border-b border-slate-700">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="rounded-md p-2 hover:bg-slate-800 transition-colors"
-            >
-              <Menu size={22} />
-            </button>
-          </div>
-          <nav className="mt-4 flex flex-col gap-1 px-2">
-            <button
-              onClick={() => navigate("/admin/accounts")}
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-            >
-              <Lock size={18} className="shrink-0" />
-              {isSidebarOpen && <span>계정관리</span>}
-            </button>
-            <button className="flex items-center gap-3 rounded-lg bg-slate-800 px-3.5 py-3 text-sm font-medium text-white transition-colors">
-              <Shirt size={18} className="shrink-0" />
-              {isSidebarOpen && <span>품평관리</span>}
-            </button>
-          </nav>
-        </div>
-        <div className="mb-4 flex flex-col gap-1 px-2 border-t border-slate-700 pt-4">
+    <AdminShell
+      title="품평관리"
+      headerRight={
+        <button
+          onClick={() => navigate("/admin/evaluations/new")}
+          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+        >
+          <Plus size={16} strokeWidth={1.5} /> 새로 만들기
+        </button>
+      }
+    >
+      <div className="mb-4 flex h-9 items-center justify-between px-1">
+        <p className="text-sm text-muted-foreground">
+          품평 프로젝트 <span className="font-medium tabular-nums text-foreground">{evaluations.length}</span>개
+        </p>
+        {/* 삭제는 선택된 항목이 있을 때만 노출 */}
+        {selectedCount > 0 && (
           <button
-            onClick={() => {
-              logout();
-              navigate("/");
-            }}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+            onClick={handleDelete}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
           >
-            <LogOut size={18} className="shrink-0" />
-            {isSidebarOpen && <span>로그아웃</span>}
+            <Trash2 size={14} strokeWidth={1.5} /> <span className="tabular-nums">{selectedCount}</span>개 삭제
           </button>
-        </div>
-      </aside>
+        )}
+      </div>
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-8 shadow-sm z-10">
-          <h2 className="text-lg font-bold text-slate-800 tracking-tight">품평관리</h2>
-          <button className="relative rounded-full p-2 hover:bg-slate-100 transition-colors">
-            <Bell size={20} className="text-slate-600" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 border-2 border-white" />
-          </button>
-        </header>
-
-        <main className="flex-1 overflow-y-auto p-10 bg-slate-50/50">
-          <div className="flex items-center justify-between mb-6 px-1">
-            <h3 className="text-base font-semibold text-slate-700 tracking-tight">품평 프로젝트 목록</h3>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleDelete}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-all flex items-center gap-2 shadow-sm"
-              >
-                <Trash2 size={14} className="text-red-500" /> 삭제
-              </button>
-              {/* ⭐ 새로 만들기 클릭 시 'new' 파라미터 전달 */}
-              <button
-                onClick={() => navigate("/admin/evaluations/new")}
-                className="rounded-lg bg-slate-900 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-700 transition-all flex items-center gap-2 shadow-sm"
-              >
-                <Plus size={16} /> 새로 만들기
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
-            <table className="w-full text-sm text-slate-700 border-collapse">
-              <thead className="bg-slate-50/50 border-b border-slate-100">
-                <tr className="font-bold text-slate-700 tracking-tight">
-                  <th className="w-16 px-6 py-6 text-left align-middle">
+      <div className={`${CARD} flex flex-col overflow-hidden`}>
+        <table className="w-full border-collapse text-sm">
+          <thead className="border-b border-border bg-muted/60">
+            <tr>
+              <th className={`${TH} w-16`}>
+                <input
+                  type="checkbox"
+                  checked={currentItems.length > 0 && currentItems.every((i) => i.selected)}
+                  onChange={(e) => toggleAll(e.target.checked)}
+                  className={`${CHECKBOX} align-middle`}
+                />
+              </th>
+              <th className={`${TH} min-w-[200px]`}>품평 이름</th>
+              <th className={TH}>기간</th>
+              <th className={`${TH} text-center`}>스타일 수</th>
+              <th className={`${TH} text-center`}>진행상태</th>
+              <th className={`${TH} text-center`}>스타일 배열</th>
+              <th className={`${TH} text-center`}>파일 다운로드</th>
+            </tr>
+          </thead>
+          <tbody>
+            {currentItems.length > 0 ? (
+              currentItems.map((item) => (
+                <tr key={item.id} className={ROW}>
+                  <td className={TD}>
                     <input
                       type="checkbox"
-                      checked={currentItems.length > 0 && currentItems.every((i) => i.selected)}
-                      onChange={(e) => toggleAll(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 accent-slate-900 align-middle"
+                      checked={item.selected}
+                      onChange={() =>
+                        setEvaluations(
+                          evaluations.map((e) => (e.id === item.id ? { ...e, selected: !e.selected } : e)),
+                        )
+                      }
+                      className={`${CHECKBOX} align-middle`}
                     />
-                  </th>
-                  <th className="px-6 py-6 text-left text-base min-w-[200px] align-middle">품평 이름</th>
-                  <th className="px-6 py-6 text-left text-base align-middle">기간</th>
-                  <th className="px-6 py-6 text-center text-base align-middle">스타일 수</th>
-                  <th className="px-6 py-6 text-center text-base align-middle">진행상태</th>
-                  <th className="px-6 py-6 text-center text-base align-middle">스타일 배열</th>
-                  <th className="px-6 py-6 text-center text-base align-middle">파일 다운로드</th>
+                  </td>
+                  <td className={`${TD} font-medium`}>
+                    {/* ⭐ 품평 이름 클릭 시 해당 프로젝트의 ID를 경로에 포함하여 이동 */}
+                    <button
+                      onClick={() => navigate(`/admin/evaluations/${item.id}`)}
+                      className="flex items-center gap-1.5 transition-colors hover:text-[hsl(var(--eval-blue))]"
+                    >
+                      {item.name} <ExternalLink size={13} strokeWidth={1.5} className="text-muted-foreground/50" />
+                    </button>
+                  </td>
+                  <td className={`${TD} tabular-nums text-muted-foreground`}>
+                    {item.periodStart} ~ {item.periodEnd}
+                  </td>
+                  <td className={`${TD} text-center font-medium tabular-nums`}>{item.styleCount} st</td>
+                  <td className={`${TD} text-center`}>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        item.isOngoing
+                          ? "bg-[hsl(var(--eval-blue)/0.12)] text-[hsl(var(--eval-blue))]"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {item.isOngoing ? "진행중" : "종료됨"}
+                    </span>
+                  </td>
+                  <td className={`${TD} text-center text-muted-foreground`}>
+                    {item.isRandomized ? "랜덤배열" : "정배열"}
+                  </td>
+                  <td className={`${TD} text-center`}>
+                    <div className="flex items-center justify-center">
+                      <button
+                        onClick={() => handleDownloadCsv(item.name)}
+                        aria-label="평가결과 다운로드"
+                        className="flex items-center justify-center rounded-lg border border-border bg-card p-2 text-foreground shadow-sm transition-colors hover:bg-muted"
+                      >
+                        <FileSpreadsheet size={16} strokeWidth={1.5} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {currentItems.length > 0 ? (
-                  currentItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-5 align-middle">
-                        <input
-                          type="checkbox"
-                          checked={item.selected}
-                          onChange={() =>
-                            setEvaluations(
-                              evaluations.map((e) => (e.id === item.id ? { ...e, selected: !e.selected } : e)),
-                            )
-                          }
-                          className="h-4 w-4 rounded border-slate-300 accent-slate-900 align-middle"
-                        />
-                      </td>
-                      <td className="px-6 py-5 align-middle font-semibold text-slate-900">
-                        {/* ⭐ 품평 이름 클릭 시 해당 프로젝트의 ID를 경로에 포함하여 이동 */}
-                        <button
-                          onClick={() => navigate(`/admin/evaluations/${item.id}`)}
-                          className="hover:text-blue-600 transition-colors flex items-center gap-1.5"
-                        >
-                          {item.name} <ExternalLink size={13} className="text-slate-300" />
-                        </button>
-                      </td>
-                      <td className="px-6 py-5 text-slate-500 font-medium align-middle">
-                        {item.periodStart} ~ {item.periodEnd}
-                      </td>
-                      <td className="px-6 py-5 text-center text-slate-900 font-bold align-middle">
-                        {item.styleCount} st
-                      </td>
-                      <td className="px-6 py-5 text-center align-middle">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-bold ${item.isOngoing ? "bg-sky-50 text-sky-600" : "bg-slate-100 text-slate-400"}`}
-                        >
-                          {item.isOngoing ? "진행중" : "종료됨"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-center align-middle font-medium text-slate-600">
-                        {item.isRandomized ? "랜덤배열" : "정배열"}
-                      </td>
-                      <td className="px-6 py-5 text-center align-middle">
-                        <div className="flex justify-center items-center">
-                          <button
-                            onClick={() => handleDownloadCsv(item.name)}
-                            className="rounded-lg p-2 bg-slate-900 text-white hover:bg-slate-700 shadow-sm flex items-center justify-center"
-                          >
-                            <FileSpreadsheet size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="py-20 text-center text-slate-400 font-medium">
-                      등록된 품평 프로젝트가 없습니다.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <div className="flex items-center justify-center py-6 bg-white border-t border-slate-100 gap-1">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="p-2 rounded-lg text-slate-400 hover:bg-slate-50 disabled:opacity-30 transition-colors"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              {[...Array(totalPages)].map((_, i) => (
-                <button
-                  key={i + 1}
-                  onClick={() => setCurrentPage(i + 1)}
-                  className={`min-w-[40px] h-10 rounded-lg text-sm font-bold transition-all ${currentPage === i + 1 ? "bg-slate-900 text-white shadow-md" : "text-slate-400 hover:bg-slate-50 hover:text-slate-900"}`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-              <button
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="p-2 rounded-lg text-slate-400 hover:bg-slate-50 disabled:opacity-30 transition-colors"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          </div>
-        </main>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={7} className="py-20 text-center text-sm text-muted-foreground">
+                  등록된 품평 프로젝트가 없습니다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <div className="flex items-center justify-center gap-1 border-t border-border/60 py-5">
+          <button
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            aria-label="이전 페이지"
+            className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
+          >
+            <ChevronLeft size={20} strokeWidth={1.5} />
+          </button>
+          {[...Array(totalPages)].map((_, i) => (
+            <button
+              key={i + 1}
+              onClick={() => setCurrentPage(i + 1)}
+              className={`h-10 min-w-[40px] rounded-lg text-sm font-medium tabular-nums transition-colors ${
+                currentPage === i + 1
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+          <button
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            aria-label="다음 페이지"
+            className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
+          >
+            <ChevronRight size={20} strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
-    </div>
+    </AdminShell>
   );
 };
 

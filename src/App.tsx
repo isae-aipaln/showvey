@@ -10,7 +10,6 @@ import GalleryPage from "./pages/GalleryPage";
 import GuestProductDetail from "./pages/GuestProductDetail";
 import StaffProductDetail from "./pages/StaffProductDetail";
 import CoordiPage from "./pages/CoordiPage";
-import AdminDashboard from "./pages/AdminDashboard";
 import AdminAccountPage from "./pages/AdminAccountPage";
 import AdminEvaluationPage from "./pages/AdminEvaluationPage";
 import AdminEvaluationDetailPage from "./pages/AdminEvaluationDetailPage";
@@ -41,7 +40,6 @@ const App = () => (
             <Route path="/admin-login" element={<AdminLoginPage />} />
 
             {/* 2. 관리자 전용 페이지 그룹 */}
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/accounts" element={<AdminAccountPage />} />
             <Route path="/admin/evaluations" element={<AdminEvaluationPage />} />
 
