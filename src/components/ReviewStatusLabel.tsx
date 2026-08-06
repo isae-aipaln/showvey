@@ -1,13 +1,18 @@
 import { REVIEW_STATUS_LABEL, type ReviewStatus } from "@/lib/evaluationSave";
 
 /**
- * 갤러리 카드 오버레이(좌측 순번 · 우측 상태)의 공통 표기 규칙.
+ * 갤러리 카드 우측 상단 진행 상태의 공통 표기 규칙.
  * PC 갤러리와 모바일 홈이 같은 모듈을 쓰게 해서 두 화면이 갈라지지 않도록 한다.
  *
- * 기본은 검정 볼드, **아직 열어보지 않은 것만 빨강**으로 남은 일을 드러낸다.
+ * 아직 안 본 것(검정) → 본 것(회색으로 가라앉음) → 평가 끝난 것(파랑)으로,
+ * 색만 훑어도 진행 상황이 읽히게 한다.
  */
 export const statusTextClass = (status: ReviewStatus) =>
-  status === "none" ? "text-destructive" : "text-foreground";
+  status === "none"
+    ? "text-foreground"
+    : status === "viewed"
+      ? "text-muted-foreground"
+      : "text-[hsl(var(--eval-blue))]";
 
 /** 흰 배경 상품사진 위에 글자가 얹히므로 흰 헤일로로 가독성을 확보 (지도앱 방식) */
 export const CARD_LABEL_HALO = {
@@ -21,8 +26,9 @@ const ReviewStatusLabel = ({
   status: ReviewStatus;
   className?: string;
 }) => (
+  /* 글자 규격은 상세 화면의 단품·코디 칩과 동일 (11px / font-medium) */
   <span
-    className={`flex items-center font-bold leading-none ${statusTextClass(status)} ${className}`}
+    className={`flex items-center font-medium leading-none ${statusTextClass(status)} ${className}`}
     style={CARD_LABEL_HALO}
   >
     {REVIEW_STATUS_LABEL[status]}
