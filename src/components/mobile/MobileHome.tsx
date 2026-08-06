@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { useAppContext } from "@/context/AppContext";
 import { exportCommentsToExcel, shareCommentsExcel } from "@/lib/exportComments";
 import { useIsDesktopViewport, getForceMobile, setForceMobile } from "@/hooks/use-desktop";
-import { isEvaluated } from "@/lib/evaluationSave";
+import { getReviewStatus } from "@/lib/evaluationSave";
+import ReviewStatusLabel, { CARD_LABEL_HALO } from "@/components/ReviewStatusLabel";
 import ResilientImage from "@/components/ResilientImage";
 import MobileTabBar, { MobileTab } from "./MobileTabBar";
 import ExitDialog from "./ExitDialog";
@@ -28,7 +29,9 @@ const MobileHome = () => {
   const [evalTarget, setEvalTarget] = useState<any | null>(null);
   const [evalOpen, setEvalOpen] = useState(false);
 
-  const evaluatedCount = products.filter((p) => isEvaluated(evaluations, p.styleCode, currentUser)).length;
+  const evaluatedCount = products.filter(
+    (p) => getReviewStatus(evaluations, p.styleCode, currentUser) === "done",
+  ).length;
 
   // 화면(그리드/피드/완료현황) 전환 시 각 화면의 스크롤 위치 저장·복원
   const surface = activeTab === "done" ? "done" : feedStartIndex !== null ? "feed" : "grid";
@@ -176,7 +179,7 @@ const MobileHome = () => {
                   흰 배경 썸네일끼리 붙어도 경계가 보이도록 구분선 색을 한 단계 진하게 */}
               <div className="grid grid-cols-3 gap-[1px] border-y border-[#e2e2e0] bg-[#e2e2e0]">
                 {products.map((product, index) => {
-                  const evaluated = isEvaluated(evaluations, product.styleCode, currentUser);
+                  const status = getReviewStatus(evaluations, product.styleCode, currentUser);
                   const badgeLabel = product.displayNo ? String(product.displayNo) : String(index + 1);
                   // 갤러리 대표컷 = 썸네일 (2026-08 회의 확정안)
                   const gridImage = product.thumbnailImage;
@@ -204,16 +207,14 @@ const MobileHome = () => {
                           )}
                         </div>
                       )}
-                      {/* 품평 순번 = 상태 표시 겸용: 미평가 검정 / 평가완료 파랑 (오버레이 1개로 통합, Apple식).
-                          미디엄 굵기 + 흰 헤일로(지도앱식 가독성 확보) */}
+                      {/* 순번은 상태와 무관한 고정 식별자라 항상 검정 (PC 갤러리와 동일 규칙) */}
                       <span
-                        className={`absolute left-2 top-1.5 flex h-[18px] items-center text-[13px] font-medium leading-none tabular-nums ${
-                          evaluated ? "text-[hsl(var(--eval-blue))]" : "text-black/85"
-                        }`}
-                        style={{ textShadow: "0 0 4px rgba(255,255,255,0.9), 0 0 2px rgba(255,255,255,0.9)" }}
+                        className="absolute left-2 top-1.5 flex h-[18px] items-center text-[13px] font-bold leading-none tabular-nums text-foreground"
+                        style={CARD_LABEL_HALO}
                       >
                         {badgeLabel}
                       </span>
+                      <ReviewStatusLabel status={status} className="absolute right-1.5 top-1.5 h-[16px] text-[10px]" />
                     </div>
                   );
                 })}

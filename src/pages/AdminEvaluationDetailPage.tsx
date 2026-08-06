@@ -6,7 +6,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import { db, storage } from "@/firebase";
 import { doc, getDoc, getDocs, collection, query, where, setDoc, updateDoc, writeBatch, orderBy } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref, deleteObject } from "firebase/storage";
+import { uploadProductImage, compressionOptionsFor } from "@/lib/uploadProductImage";
 import { Plus, Trash2, Save, Upload, Download, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, ChevronLeft, ArrowDownUp } from "lucide-react";
 import AdminShell from "@/components/admin/AdminShell";
 import ProductImageCell from "@/components/admin/ProductImageCell";
@@ -316,22 +317,8 @@ const AdminEvaluationDetailPage = () => {
     }
   };
 
-  const uploadToFirebase = async (file: File, styleNo: string, category: string) => {
-    const compressionOptions = { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true };
-    let compressedFile: File = file;
-    try {
-      compressedFile = await imageCompression(file, compressionOptions);
-    } catch {
-      compressedFile = file;
-    }
-    const ext = file.name.split(".").pop() || "";
-    const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9.\-_]/g, "_");
-    const fileName = `${Date.now()}_${baseName}.${ext}`;
-    const filePath = `product_image/${styleNo}/${category}/${fileName}`;
-    const storageRef = ref(storage, filePath);
-    await uploadBytes(storageRef, compressedFile);
-    return await getDownloadURL(storageRef);
-  };
+  const uploadToFirebase = (file: File, styleNo: string, category: string) =>
+    uploadProductImage(file, styleNo, category);
 
   const handleDeleteImage = async (
     rowIndex: number,
@@ -658,7 +645,7 @@ const AdminEvaluationDetailPage = () => {
           let final = original;
           if (original.size > 0.5 * 1024 * 1024) {
             try {
-              const comp = await imageCompression(original, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true });
+              const comp = await imageCompression(original, compressionOptionsFor(category));
               final = new File([comp], fileName, { type: comp.type });
             } catch (err) {}
           }
@@ -690,7 +677,7 @@ const AdminEvaluationDetailPage = () => {
     const compressed: File[] = [];
     for (const f of images) {
       try {
-        const c = await imageCompression(f, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true });
+        const c = await imageCompression(f, compressionOptionsFor(type));
         compressed.push(new File([c], f.name, { type: c.type }));
       } catch { compressed.push(f); }
     }
@@ -886,8 +873,8 @@ const AdminEvaluationDetailPage = () => {
           const compressed: File[] = [];
           for (const f of raw) {
             try {
-              const c = await imageCompression(f, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true });
-              compressed.push(new File([c], f.name, { type: f.type }));
+              const c = await imageCompression(f, compressionOptionsFor(activeUpload.type));
+              compressed.push(new File([c], f.name, { type: c.type }));
             } catch { compressed.push(f); }
           }
           const urls = compressed.map(f => URL.createObjectURL(f));

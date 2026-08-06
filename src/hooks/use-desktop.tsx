@@ -53,3 +53,33 @@ export function useIsDesktop() {
 
   return isDesktopViewport && !forceMobile;
 }
+
+// '모바일 화면 보기' 설정만 구독 (화면 폭과 무관) — 폭이 좁아도 개편된 레이아웃을 쓰게 할 때 사용
+export function useForceMobile() {
+  const [forceMobile, setForceMobileState] = React.useState(getForceMobile);
+
+  React.useEffect(() => {
+    const onChange = () => setForceMobileState(getForceMobile());
+    window.addEventListener(FORCE_MOBILE_EVENT, onChange);
+    return () => window.removeEventListener(FORCE_MOBILE_EVENT, onChange);
+  }, []);
+
+  return forceMobile;
+}
+
+// 마우스가 있는 기기인지 (터치 전용 단말과 구분).
+// 창을 줄인 PC에서는 스와이프가 어색하므로 캐러셀 좌우 화살표를 띄우는 데 쓴다
+export function useHasMousePointer() {
+  const [fine, setFine] = React.useState(
+    () => typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches,
+  );
+
+  React.useEffect(() => {
+    const mql = window.matchMedia("(pointer: fine)");
+    const onChange = (e: MediaQueryListEvent) => setFine(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  return fine;
+}

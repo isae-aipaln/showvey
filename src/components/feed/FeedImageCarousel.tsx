@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import { Heart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Heart } from "lucide-react";
 import ResilientImage from "@/components/ResilientImage";
+import { useHasMousePointer } from "@/hooks/use-desktop";
 
 interface FeedImageCarouselProps {
   images: string[];
@@ -30,6 +31,8 @@ const FeedImageCarousel = ({
 }: FeedImageCarouselProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
+  // 창을 줄인 PC에서는 스와이프가 어렵다 — 마우스가 있는 기기에서만 좌우 화살표를 노출
+  const hasMouse = useHasMousePointer();
 
   // 썸네일 탭 → 해당 슬라이드로 이동
   const scrollToIndex = (i: number) => {
@@ -164,6 +167,27 @@ const FeedImageCarousel = ({
             />
           ))}
         </div>
+      )}
+      {/* 좌우 화살표 — 마우스가 있는 기기(창을 줄인 PC)에서만. 터치 기기는 스와이프로 충분 */}
+      {hasMouse && images.length > 1 && (
+        <>
+          <button
+            onClick={() => scrollToIndex(activeIndex - 1)}
+            disabled={activeIndex <= 0}
+            aria-label="이전 이미지"
+            className="absolute left-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-foreground shadow-md backdrop-blur-sm transition-opacity hover:bg-white disabled:opacity-0"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => scrollToIndex(activeIndex + 1)}
+            disabled={activeIndex >= images.length - 1}
+            aria-label="다음 이미지"
+            className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-foreground shadow-md backdrop-blur-sm transition-opacity hover:bg-white disabled:opacity-0"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </>
       )}
     </div>
     {/* 사진앱식 하단 썸네일 스트립: 뷰포트 근처에서만 이미지 마운트(과부하 방지), 캐러셀과 같은 URL이라 추가 다운로드 없음 */}

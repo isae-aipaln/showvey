@@ -71,8 +71,13 @@ export async function buildCommentsWorkbookBlob(params: {
   const { evaluations, products, evaluatorId } = params;
 
   // 1) 본인이 평가한 항목만 필터
+  //    열람만 해도 문서가 생성되므로(확인 완료 집계), 내용이 있는 것만 내보내 빈 행을 막는다
   const myEvals = evaluations.filter(
-    (e) => e.Evaluator_ID === evaluatorId && e.Style_no,
+    (e) =>
+      e.Evaluator_ID === evaluatorId &&
+      e.Style_no &&
+      (String((e as any).Comment ?? "").trim() !== "" ||
+        (Array.isArray((e as any).Liked_images) && (e as any).Liked_images.length > 0)),
   );
 
   if (myEvals.length === 0) {
